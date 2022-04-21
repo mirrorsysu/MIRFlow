@@ -17,6 +17,9 @@
     int _coarsest_scale;
     int _finest_scale;
     
+    int _num_iter;
+    int _grad_descent_iter;
+    
     int _patch_stride;
     int _patch_size;
     
@@ -60,6 +63,9 @@
     if (self = [super init]) {
         _coarsest_scale = 4;
         _finest_scale = 2;
+        
+        _num_iter = 2;
+        _grad_descent_iter = 16;
         
         _patch_stride = 4;
         _patch_size = 8;
@@ -260,8 +266,8 @@
             MIRPrecomputeStructureTensorOpt opt = {
                 .w = _w,
                 .h = _h,
-                .patchSize = _patch_size,
-                .patchStride = _patch_stride,
+                .patch_size = _patch_size,
+                .patch_stride = _patch_stride,
                 .ws = _ws
             };
             commandBuffer = [MIRPrecomputeStructureTensor encode:commandBuffer I0x:_I0xs[i] I0y:_I0ys[i] I0xx_aux:_I0xx_aux I0yy_aux:_I0yy_aux I0xy_aux:_I0xy_aux I0x_aux:_I0x_aux I0y_aux:_I0y_aux I0xx_buf:_I0xx_buf I0yy_buf:_I0yy_buf I0xy_buf:_I0xy_buf I0x_buf:_I0x_buf I0y_buf:
@@ -269,20 +275,56 @@
         }
 
         {
+            int num_inner_iter = (int)floor(_grad_descent_iter / (float)_num_iter);
             MIRInvertSearchOpt opt = {
                 .w = _w,
                 .h = _h,
-                .patchSize = _patch_size,
-                .patchStride = _patch_stride,
+                .patch_size = _patch_size,
+                .patch_stride = _patch_stride,
                 .ws = _ws,
                 .hs = _hs,
-                .borderSize = _border_size
+                .border_size = _border_size,
+                .num_inner_iter = num_inner_iter
             };
-            commandBuffer = [MIRInvertSearch encode_fw1:commandBuffer U:_Us[i] I0:_I0s[i] I1:_I1s_ext[i] S:_S opt:opt];
+            for (int iter = 0; iter < _num_iter; iter++) {
+                if (iter == 0) {
+                    commandBuffer = [MIRInvertSearch encode_fw1:commandBuffer U:_Us[i] I0:_I0s[i] I1:_I1s_ext[i] S:_S opt:opt];
+                    commandBuffer = [MIRInvertSearch encode_fw2:commandBuffer U:_Us[i] I0:_I0s[i] I1:_I1s_ext[i] I0x:_I0xs[i] I0y:_I0ys[i] I0xx_buf:_I0xx_buf I0yy_buf:_I0yy_buf I0xy_buf:_I0xy_buf I0x_buf:_I0x_buf I0y_buf:_I0y_buf S:_S opt:opt];
+                } else {
+//                    ocl::Kernel k3("dis_patch_inverse_search_bwd_1", ocl::video::dis_flow_oclsrc, build_options);
+//                    size_t global_sz[] = {(size_t)hs * 8};
+//                    size_t local_sz[]  = {8};
+//
+//                    k3.args(
+//                            ocl::KernelArg::PtrReadOnly(I0),
+//                            ocl::KernelArg::PtrReadOnly(I1),
+//                            (int)w, (int)h, (int)ws, (int)hs,
+//                            ocl::KernelArg::PtrReadWrite(u_S)
+//                            );
+//                    if (!k3.run(1, global_sz, local_sz, false))
+//                        return false;
+//
+//                    ocl::Kernel k4("dis_patch_inverse_search_bwd_2", ocl::video::dis_flow_oclsrc, build_options);
+//
+//                    k4.args(
+//                            ocl::KernelArg::PtrReadOnly(I0),
+//                            ocl::KernelArg::PtrReadOnly(I1),
+//                            ocl::KernelArg::PtrReadOnly(I0x),
+//                            ocl::KernelArg::PtrReadOnly(I0y),
+//                            ocl::KernelArg::PtrReadOnly(u_I0xx_buf),
+//                            ocl::KernelArg::PtrReadOnly(u_I0yy_buf),
+//                            ocl::KernelArg::PtrReadOnly(u_I0xy_buf),
+//                            ocl::KernelArg::PtrReadOnly(u_I0x_buf),
+//                            ocl::KernelArg::PtrReadOnly(u_I0y_buf),
+//                            (int)w, (int)h,(int)ws, (int)hs,
+//                            (int)num_inner_iter,
+//                            ocl::KernelArg::PtrReadWrite(u_S)
+//                            );
+//                    if (!k4.run(2, globalSize, localSize, false))
+//                        return false;
+                }
+            }
         }
-//        if (!ocl_PatchInverseSearch(u_U[i], u_I0s[i], u_I1s_ext[i], u_I0xs[i], u_I0ys[i], 2, i))
-//            return false;
-//        
 //        if (!ocl_Densification(u_U[i], u_S, u_I0s[i], u_I1s[i]))
 //            return false;
 //        

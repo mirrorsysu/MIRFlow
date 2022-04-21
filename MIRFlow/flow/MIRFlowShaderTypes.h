@@ -39,8 +39,8 @@ typedef enum {
 typedef struct MIRPrecomputeStructureTensorOpt {
     int w;
     int h;
-    int patchSize;
-    int patchStride;
+    int patch_size;
+    int patch_stride;
     int ws;
 } MIRPrecomputeStructureTensorOpt;
 
@@ -49,6 +49,15 @@ typedef enum {
     MIRInvertSearch_U = 0,
     MIRInvertSearch_I0,
     MIRInvertSearch_I1,
+    
+    MIRInvertSearch_I0x,
+    MIRInvertSearch_I0y,
+    MIRInvertSearch_I0xx_buf,
+    MIRInvertSearch_I0yy_buf,
+    MIRInvertSearch_I0xy_buf,
+    MIRInvertSearch_I0x_buf,
+    MIRInvertSearch_I0y_buf,
+    
     MIRInvertSearch_opt,
     MIRInvertSearch_S,
     MIRInvertSearch_smem,
@@ -57,11 +66,12 @@ typedef enum {
 typedef struct MIRInvertSearchOpt {
     int w;
     int h;
-    int patchSize;
-    int patchStride;
+    int patch_size;
+    int patch_stride;
     int ws;
     int hs;
-    int borderSize;
+    int border_size;
+    int num_inner_iter;
 } MIRInvertSearchOpt;
 
 

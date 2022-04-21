@@ -11,6 +11,9 @@
 
 using namespace metal;
 
+#define EPS 0.001f
+#define INF 1E+10F
+
 constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
 
 kernel void MIRFlow_resizeUChar(texture2d<half, access::sample> texture,
@@ -108,7 +111,7 @@ kernel void MIRFlow_PrecomputeStructureTensor_hor(constant short *I0x [[ buffer(
     int js = 0;
 #define atI(ptr, row, col) *(ptr + (row) * opt.w + (col))
 #define atAux(ptr, row, col) *(ptr + (row) * opt.ws + (col))
-    for (; j < opt.patchSize; j++) {
+    for (; j < opt.patch_size; j++) {
         short x = atI(I0x, gid, j);
         short y = atI(I0y, gid, j);
         sum_xx += x * x;
@@ -125,8 +128,8 @@ kernel void MIRFlow_PrecomputeStructureTensor_hor(constant short *I0x [[ buffer(
     js++;
     
     for (; j < opt.w; j++) {
-        short xp = atI(I0x, gid, j - opt.patchSize);
-        short yp = atI(I0y, gid, j - opt.patchSize);
+        short xp = atI(I0x, gid, j - opt.patch_size);
+        short yp = atI(I0y, gid, j - opt.patch_size);
         short x = atI(I0x, gid, j);
         short y = atI(I0y, gid, j);
         sum_xx += x * x - xp * xp;
@@ -134,7 +137,7 @@ kernel void MIRFlow_PrecomputeStructureTensor_hor(constant short *I0x [[ buffer(
         sum_xy += x * y - xp * yp;
         sum_x += x - xp;
         sum_y += x - xp;
-        if ((j - opt.patchSize + 1) % opt.patchStride == 0) {
+        if ((j - opt.patch_size + 1) % opt.patch_stride == 0) {
             atAux(I0xx_aux, gid, js) = sum_xx;
             atAux(I0yy_aux, gid, js) = sum_yy;
             atAux(I0xy_aux, gid, js) = sum_xy;
@@ -168,7 +171,7 @@ kernel void MIRFlow_PrecomputeStructureTensor_ver(constant float *I0xx_aux [[ bu
     int i = 0;
     int is = 0;
 #define at(ptr, row, col) *(ptr + (row) * opt.ws + (col))
-    for (; i < opt.patchSize; i++) {
+    for (; i < opt.patch_size; i++) {
         sum_xx += at(I0xx_aux, i, gid);
         sum_yy += at(I0yy_aux, i, gid);
         sum_xy += at(I0xy_aux, i, gid);
@@ -183,12 +186,12 @@ kernel void MIRFlow_PrecomputeStructureTensor_ver(constant float *I0xx_aux [[ bu
     is++;
     
     for (; i < opt.h; i++) {
-        sum_xx += at(I0xx_aux, i, gid) - at(I0xx_aux, i - opt.patchSize, gid);
-        sum_yy += at(I0yy_aux, i, gid) - at(I0yy_aux, i - opt.patchSize, gid);
-        sum_xy += at(I0xy_aux, i, gid) - at(I0xy_aux, i - opt.patchSize, gid);
-        sum_x += at(I0x_aux, i, gid) - at(I0x_aux, i - opt.patchSize, gid);
-        sum_y += at(I0y_aux, i, gid) - at(I0y_aux, i - opt.patchSize, gid);
-        if ((i - opt.patchSize + 1) % opt.patchStride == 0) {
+        sum_xx += at(I0xx_aux, i, gid) - at(I0xx_aux, i - opt.patch_size, gid);
+        sum_yy += at(I0yy_aux, i, gid) - at(I0yy_aux, i - opt.patch_size, gid);
+        sum_xy += at(I0xy_aux, i, gid) - at(I0xy_aux, i - opt.patch_size, gid);
+        sum_x += at(I0x_aux, i, gid) - at(I0x_aux, i - opt.patch_size, gid);
+        sum_y += at(I0y_aux, i, gid) - at(I0y_aux, i - opt.patch_size, gid);
+        if ((i - opt.patch_size + 1) % opt.patch_stride == 0) {
             at(I0xx_buf, is, gid) = sum_xx;
             at(I0yy_buf, is, gid) = sum_yy;
             at(I0xy_buf, is, gid) = sum_xy;
@@ -201,8 +204,8 @@ kernel void MIRFlow_PrecomputeStructureTensor_ver(constant float *I0xx_aux [[ bu
 }
 
 #define INIT_BILINEAR_WEIGHTS(Ux, Uy) \
-i_I1 = clamp(i + Uy + borderSize, i_lower_limit, i_upper_limit); \
-j_I1 = clamp(j + Ux + borderSize, j_lower_limit, j_upper_limit); \
+i_I1 = clamp(i + Uy + border_size, i_lower_limit, i_upper_limit); \
+j_I1 = clamp(j + Ux + border_size, j_lower_limit, j_upper_limit); \
 { \
 float di = i_I1 - floor(i_I1); \
 float dj = j_I1 - floor(j_I1); \
@@ -216,13 +219,13 @@ float computeSSDMeanNorm(constant uchar *I0_ptr,
                          constant uchar *I1_ptr,
                          int I0_stride,
                          int I1_stride,
-                         int patchSize,
+                         int patch_size,
                          float w00, float w01, float w10, float w11,
                          int i,
                          threadgroup vector_float2 *smem /*[8]*/
                          )
 {
-    int n = patchSize * patchSize;
+    int n = patch_size * patch_size;
     
     float4 vec1, vec2;
     {
@@ -278,25 +281,25 @@ kernel void MIRFlow_invertSearch_fwd1(constant vector_float2 *U_ptr [[ buffer(MI
                                       uint is [[ threadgroup_position_in_grid ]],
                                       uint sid [[ thread_position_in_threadgroup ]]
                                       ) {
-    int w = opt.w, h = opt.h, patchSize = opt.patchSize, patchStride = opt.patchStride, borderSize = opt.borderSize, ws = opt.ws;
-    int patchSizeHalf = patchSize / 2;
+    int w = opt.w, h = opt.h, patch_size = opt.patch_size, patch_stride = opt.patch_stride, border_size = opt.border_size, ws = opt.ws;
+    int patchSizeHalf = patch_size / 2;
     
-    int i = is * patchStride;
+    int i = is * patch_stride;
     int j = 0;
-    int w_ext = w + 2 * borderSize;
+    int w_ext = w + 2 * border_size;
     
-    float i_lower_limit = borderSize - patchSize + 1.0f;
-    float i_upper_limit = borderSize + h - 1.0f;
-    float j_lower_limit = borderSize - patchSize + 1.0f;
-    float j_upper_limit = borderSize + w - 1.0f;
+    float i_lower_limit = border_size - patch_size + 1.0f;
+    float i_upper_limit = border_size + h - 1.0f;
+    float j_lower_limit = border_size - patch_size + 1.0f;
+    float j_upper_limit = border_size + w - 1.0f;
     
     threadgroup vector_float2 smem[8];
     
     vector_float2 prev_U = U_ptr[(i + patchSizeHalf) * w + j + patchSizeHalf];
     S_ptr[is * ws] = prev_U;
-    j += patchStride;
+    j += patch_stride;
     
-    for (int js = 1; js < ws; js++, j += patchStride)
+    for (int js = 1; js < ws; js++, j += patch_stride)
     {
         float2 U = U_ptr[(i + patchSizeHalf) * w + j + patchSizeHalf];
         
@@ -305,12 +308,12 @@ kernel void MIRFlow_invertSearch_fwd1(constant vector_float2 *U_ptr [[ buffer(MI
         INIT_BILINEAR_WEIGHTS(U.x, U.y);
         float min_SSD = computeSSDMeanNorm(I0_ptr + i * w + j,
                                            I1_ptr + (int)i_I1 * w_ext + (int)j_I1,
-                                           w, w_ext, patchSize, w00, w01, w10, w11, sid, smem);
+                                           w, w_ext, patch_size, w00, w01, w10, w11, sid, smem);
         
         INIT_BILINEAR_WEIGHTS(prev_U.x, prev_U.y);
         float cur_SSD = computeSSDMeanNorm(I0_ptr + i * w + j,
                                            I1_ptr + (int)i_I1 * w_ext + (int)j_I1,
-                                           w, w_ext, patchSize, w00, w01, w10, w11, sid, smem);
+                                           w, w_ext, patch_size, w00, w01, w10, w11, sid, smem);
         
         prev_U = (cur_SSD < min_SSD) ? prev_U : U;
         S_ptr[is * ws + js] = prev_U;
@@ -319,70 +322,157 @@ kernel void MIRFlow_invertSearch_fwd1(constant vector_float2 *U_ptr [[ buffer(MI
     
 }
 
-//
-//__kernel void dis_patch_inverse_search_fwd_2(__global const float2 *U_ptr,
-//                                             __global const uchar *I0_ptr, __global const uchar *I1_ptr,
-//                                             __global const short *I0x_ptr, __global const short *I0y_ptr,
-//                                             __global const float *xx_ptr, __global const float *yy_ptr,
-//                                             __global const float *xy_ptr,
-//                                             __global const float *x_ptr, __global const float *y_ptr,
-//                                             int w, int h, int ws, int hs, int num_inner_iter,
-//                                             __global float2 *S_ptr)
-//{
-//    int js = get_global_id(0);
-//    int is = get_global_id(1);
-//    int i = is * DIS_PATCH_STRIDE;
-//    int j = js * DIS_PATCH_STRIDE;
-//    const int psz = DIS_PATCH_SIZE;
-//    int w_ext = w + 2 * DIS_BORDER_SIZE;
-//    int index = is * ws + js;
-//    
-//    if (js >= ws || is >= hs) return;
-//    
-//    float2 U0 = S_ptr[index];
-//    float2 cur_U = U0;
-//    float cur_xx = xx_ptr[index];
-//    float cur_yy = yy_ptr[index];
-//    float cur_xy = xy_ptr[index];
-//    float detH = cur_xx * cur_yy - cur_xy * cur_xy;
-//    
-//    float inv_detH = (fabs(detH) < EPS) ? 1.0 / EPS : 1.0 / detH;
-//    float invH11 = cur_yy * inv_detH;
-//    float invH12 = -cur_xy * inv_detH;
-//    float invH22 = cur_xx * inv_detH;
-//    
-//    float prev_SSD = INF;
-//    float x_grad_sum = x_ptr[index];
-//    float y_grad_sum = y_ptr[index];
-//    
-//    const float i_lower_limit = DIS_BORDER_SIZE - DIS_PATCH_SIZE + 1.0f;
-//    const float i_upper_limit = DIS_BORDER_SIZE + h - 1.0f;
-//    const float j_lower_limit = DIS_BORDER_SIZE - DIS_PATCH_SIZE + 1.0f;
-//    const float j_upper_limit = DIS_BORDER_SIZE + w - 1.0f;
-//    
-//    for (int t = 0; t < num_inner_iter; t++)
-//    {
-//        float i_I1, j_I1, w00, w01, w10, w11;
-//        INIT_BILINEAR_WEIGHTS(cur_U.x, cur_U.y);
-//        float4 res = processPatchMeanNorm(
-//                                          I0_ptr  + i * w + j, I1_ptr + (int)i_I1 * w_ext + (int)j_I1,
-//                                          I0x_ptr + i * w + j, I0y_ptr + i * w + j,
-//                                          w, w_ext, w00, w01, w10, w11,
-//                                          x_grad_sum, y_grad_sum);
-//        
-//        float SSD = res.x;
-//        float dUx = res.y;
-//        float dUy = res.z;
-//        float dx = invH11 * dUx + invH12 * dUy;
-//        float dy = invH12 * dUx + invH22 * dUy;
-//        
-//        cur_U -= (float2)(dx, dy);
-//        
-//        if (SSD >= prev_SSD)
-//            break;
-//        prev_SSD = SSD;
-//    }
-//    
-//    float2 vec = cur_U - U0;
-//    S_ptr[index] = (dot(vec, vec) <= (float)(DIS_PATCH_SIZE * DIS_PATCH_SIZE)) ? cur_U : U0;
-//}
+
+float4 processPatchMeanNorm(constant uchar *I0_ptr,
+                            constant uchar *I1_ptr,
+                            constant short *I0x_ptr,
+                            constant short *I0y_ptr,
+                            int patch_size,
+                            int I0_stride, int I1_stride,
+                            float w00, float w01, float w10, float w11,
+                            float x_grad_sum, float y_grad_sum
+                            ) {
+    const float inv_n = 1.0f / (float)(patch_size * patch_size);
+
+    float sum_diff = 0.0, sum_diff_sq = 0.0;
+    float sum_I0x_mul = 0.0, sum_I0y_mul = 0.0;
+
+    uchar4 I1_vec2_lo = *I1_ptr;
+    uchar4 I1_vec2_p_lo = *(I1_ptr + 1);
+    uchar4 I1_vec2_hi = *(I1_ptr + 4);
+    uchar4 I1_vec2_p_hi = *(I1_ptr + 5);
+
+    for (int i = 0; i < 8; i++)
+    {
+        float4 vec_lo, vec_hi;
+        {
+            
+            uchar4 I0_vec_lo = *(I0_ptr + i * I0_stride);
+            
+            uchar4 I1_vec1_lo = I1_vec2_lo;
+            uchar4 I1_vec1_p_lo = I1_vec2_p_lo;
+            
+            I1_vec2_lo = *(I1_ptr + (i + 1) * I1_stride);
+            I1_vec2_p_lo = *(I1_ptr + (i + 1) * I1_stride + 1);
+            
+            vec_lo = w00 * float4(I1_vec1_lo) + w01 * float4(I1_vec1_p_lo) +
+            w10 * float4(I1_vec2_lo) + w11 * float4(I1_vec2_p_lo) -
+            float4(I0_vec_lo);
+        }
+        {
+            uchar4 I0_vec_hi = *(I0_ptr + i * I0_stride + 4);
+            
+            uchar4 I1_vec1_hi = I1_vec2_hi;
+            uchar4 I1_vec1_p_hi = I1_vec2_hi;
+            
+            I1_vec2_hi = *(I1_ptr + (i + 1) * I1_stride + 4);
+            I1_vec2_p_hi = *(I1_ptr + (i + 1) * I1_stride + 5);
+            
+            vec_hi = w00 * float4(I1_vec1_hi) + w01 * float4(I1_vec1_p_hi) +
+            w10 * float4(I1_vec2_hi) + w11 * float4(I1_vec2_p_hi) -
+            float4(I0_vec_hi);
+        }
+
+        sum_diff += (dot(vec_lo, 1.0) + dot(vec_hi, 1.0));
+        sum_diff_sq += (dot(vec_lo, vec_lo) + dot(vec_hi, vec_hi));
+
+        short4 I0x_vec_lo = *(I0x_ptr + i * I0_stride);
+        short4 I0x_vec_hi = *(I0x_ptr + i * I0_stride + 4);
+        short4 I0y_vec_lo = *(I0y_ptr + i * I0_stride);
+        short4 I0y_vec_hi = *(I0y_ptr + i * I0_stride + 4);
+
+        sum_I0x_mul += dot(vec_lo, float4(I0x_vec_lo));
+        sum_I0x_mul += dot(vec_hi, float4(I0x_vec_hi));
+        sum_I0y_mul += dot(vec_lo, float4(I0y_vec_lo));
+        sum_I0y_mul += dot(vec_hi, float4(I0y_vec_hi));
+    }
+
+    float dst_dUx = sum_I0x_mul - sum_diff * x_grad_sum * inv_n;
+    float dst_dUy = sum_I0y_mul - sum_diff * y_grad_sum * inv_n;
+    float SSD = sum_diff_sq - sum_diff * sum_diff * inv_n;
+    
+    float4 r = float4(SSD, dst_dUx, dst_dUy, 0);
+    return r;
+}
+
+
+kernel void MIRFlow_invertSearch_fwd2(constant vector_float2 *U_ptr [[ buffer(MIRInvertSearch_U) ]],
+                                      constant uchar *I0_ptr [[ buffer(MIRInvertSearch_I0) ]],
+                                      constant uchar *I1_ptr [[ buffer(MIRInvertSearch_I1) ]],
+                                      constant short *I0x_ptr [[ buffer(MIRInvertSearch_I0x) ]],
+                                      constant short *I0y_ptr [[ buffer(MIRInvertSearch_I0y) ]],
+                                      constant float *xx_ptr [[ buffer(MIRInvertSearch_I0xx_buf) ]],
+                                      constant float *yy_ptr [[ buffer(MIRInvertSearch_I0yy_buf) ]],
+                                      constant float *xy_ptr [[ buffer(MIRInvertSearch_I0xy_buf) ]],
+                                      constant float *x_ptr [[ buffer(MIRInvertSearch_I0x_buf) ]],
+                                      constant float *y_ptr [[ buffer(MIRInvertSearch_I0y_buf) ]],
+                                      device vector_float2 *S_ptr [[ buffer(MIRInvertSearch_S) ]],
+                                      constant MIRInvertSearchOpt &opt,
+                                      uint2 gid [[ thread_position_in_grid ]])
+{
+    if (gid.x >= (uint)opt.ws || gid.y >= (uint)opt.hs) {
+        return;
+    }
+    int w = opt.w, h = opt.h, ws = opt.ws, hs = opt.hs,
+    patch_stride = opt.patch_stride, patch_size = opt.patch_size, border_size = opt.border_size,
+    num_inner_iter = opt.num_inner_iter;
+    
+    int js = gid.y;
+    int is = gid.x;
+    int i = is * patch_stride;
+    int j = js *  patch_stride;
+//    const int psz =  patch_size;
+    int w_ext = w + 2 * border_size;
+    int index = is * ws + js;
+    
+    if (js >= ws || is >= hs) return;
+    
+    float2 U0 = S_ptr[index];
+    float2 cur_U = U0;
+    float cur_xx = xx_ptr[index];
+    float cur_yy = yy_ptr[index];
+    float cur_xy = xy_ptr[index];
+    float detH = cur_xx * cur_yy - cur_xy * cur_xy;
+    
+    float inv_detH = (fabs(detH) < EPS) ? 1.0 / EPS : 1.0 / detH;
+    float invH11 = cur_yy * inv_detH;
+    float invH12 = -cur_xy * inv_detH;
+    float invH22 = cur_xx * inv_detH;
+    
+    float prev_SSD = INF;
+    float x_grad_sum = x_ptr[index];
+    float y_grad_sum = y_ptr[index];
+    
+    const float i_lower_limit = border_size - patch_size + 1.0f;
+    const float i_upper_limit = border_size + h - 1.0f;
+    const float j_lower_limit = border_size - patch_size + 1.0f;
+    const float j_upper_limit = border_size + w - 1.0f;
+    
+    for (int t = 0; t < num_inner_iter; t++)
+    {
+        float i_I1, j_I1, w00, w01, w10, w11;
+        INIT_BILINEAR_WEIGHTS(cur_U.x, cur_U.y);
+        float4 res = processPatchMeanNorm(I0_ptr  + i * w + j,
+                                          I1_ptr + (int)i_I1 * w_ext + (int)j_I1,
+                                          I0x_ptr + i * w + j,
+                                          I0y_ptr + i * w + j,
+                                          patch_size,
+                                          w, w_ext, w00, w01, w10, w11,
+                                          x_grad_sum, y_grad_sum);
+        
+        float SSD = res.x;
+        float dUx = res.y;
+        float dUy = res.z;
+        float dx = invH11 * dUx + invH12 * dUy;
+        float dy = invH12 * dUx + invH22 * dUy;
+        
+        cur_U -= float2(dx, dy);
+        
+        if (SSD >= prev_SSD)
+            break;
+        prev_SSD = SSD;
+    }
+    
+    float2 vec = cur_U - U0;
+    S_ptr[index] = (dot(vec, vec) <= (float)(patch_size * patch_size)) ? cur_U : U0;
+}

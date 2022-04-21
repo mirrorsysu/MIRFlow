@@ -144,6 +144,9 @@
 }
 
 - (void)generateBufferWithWidth:(int)width height:(int)height {
+    _inputW = width;
+    _inputH = height;
+    
     int fraction = 1;
     int cur_rows = 0, cur_cols = 0;
     

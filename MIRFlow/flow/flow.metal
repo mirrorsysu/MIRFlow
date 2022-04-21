@@ -318,8 +318,6 @@ kernel void MIRFlow_invertSearch_fwd1(constant vector_float2 *U_ptr [[ buffer(MI
         prev_U = (cur_SSD < min_SSD) ? prev_U : U;
         S_ptr[is * ws + js] = prev_U;
     }
-    S_ptr[is * w + sid] = vector_float2(is, sid);
-    
 }
 
 

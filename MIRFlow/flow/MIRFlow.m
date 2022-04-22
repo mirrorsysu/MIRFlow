@@ -291,40 +291,11 @@
             };
             for (int iter = 0; iter < _num_iter; iter++) {
                 if (iter == 0) {
-                    commandBuffer = [MIRInvertSearch encode_fw1:commandBuffer U:_Us[i] I0:_I0s[i] I1:_I1s_ext[i] S:_S opt:opt];
-                    commandBuffer = [MIRInvertSearch encode_fw2:commandBuffer U:_Us[i] I0:_I0s[i] I1:_I1s_ext[i] I0x:_I0xs[i] I0y:_I0ys[i] I0xx_buf:_I0xx_buf I0yy_buf:_I0yy_buf I0xy_buf:_I0xy_buf I0x_buf:_I0x_buf I0y_buf:_I0y_buf S:_S opt:opt];
+                    commandBuffer = [MIRInvertSearch encode_fwd1:commandBuffer U:_Us[i] I0:_I0s[i] I1:_I1s_ext[i] S:_S opt:opt];
+                    commandBuffer = [MIRInvertSearch encode_fwd2:commandBuffer U:_Us[i] I0:_I0s[i] I1:_I1s_ext[i] I0x:_I0xs[i] I0y:_I0ys[i] I0xx_buf:_I0xx_buf I0yy_buf:_I0yy_buf I0xy_buf:_I0xy_buf I0x_buf:_I0x_buf I0y_buf:_I0y_buf S:_S opt:opt];
                 } else {
-//                    ocl::Kernel k3("dis_patch_inverse_search_bwd_1", ocl::video::dis_flow_oclsrc, build_options);
-//                    size_t global_sz[] = {(size_t)hs * 8};
-//                    size_t local_sz[]  = {8};
-//
-//                    k3.args(
-//                            ocl::KernelArg::PtrReadOnly(I0),
-//                            ocl::KernelArg::PtrReadOnly(I1),
-//                            (int)w, (int)h, (int)ws, (int)hs,
-//                            ocl::KernelArg::PtrReadWrite(u_S)
-//                            );
-//                    if (!k3.run(1, global_sz, local_sz, false))
-//                        return false;
-//
-//                    ocl::Kernel k4("dis_patch_inverse_search_bwd_2", ocl::video::dis_flow_oclsrc, build_options);
-//
-//                    k4.args(
-//                            ocl::KernelArg::PtrReadOnly(I0),
-//                            ocl::KernelArg::PtrReadOnly(I1),
-//                            ocl::KernelArg::PtrReadOnly(I0x),
-//                            ocl::KernelArg::PtrReadOnly(I0y),
-//                            ocl::KernelArg::PtrReadOnly(u_I0xx_buf),
-//                            ocl::KernelArg::PtrReadOnly(u_I0yy_buf),
-//                            ocl::KernelArg::PtrReadOnly(u_I0xy_buf),
-//                            ocl::KernelArg::PtrReadOnly(u_I0x_buf),
-//                            ocl::KernelArg::PtrReadOnly(u_I0y_buf),
-//                            (int)w, (int)h,(int)ws, (int)hs,
-//                            (int)num_inner_iter,
-//                            ocl::KernelArg::PtrReadWrite(u_S)
-//                            );
-//                    if (!k4.run(2, globalSize, localSize, false))
-//                        return false;
+                    commandBuffer = [MIRInvertSearch encode_bwd1:commandBuffer I0:_I0s[i] I1:_I1s_ext[i] S:_S opt:opt];
+                    commandBuffer = [MIRInvertSearch encode_bwd2:commandBuffer I0:_I0s[i] I1:_I1s_ext[i] I0x:_I0xs[i] I0y:_I0ys[i] I0xx_buf:_I0xx_buf I0yy_buf:_I0yy_buf I0xy_buf:_I0xy_buf I0x_buf:_I0x_buf I0y_buf:_I0y_buf S:_S opt:opt];
                 }
             }
         }

@@ -65,8 +65,8 @@ int main(int argc, const char * argv[]) {
     @autoreleasepool {
         NSLog(@"Hello, World!");
         
-        int w = 1000;
-        int h = 1000;
+        int w = 2000;
+        int h = 2000;
         
         [MIRMetalContext startCapture];
         id<MTLTexture> I0 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/1.jpg", w, h);
@@ -232,7 +232,7 @@ void testFwd1(void) {
     id<MTLCommandBuffer> commandBuffer = [MIRMetalContext.commandQueue commandBuffer];
     {
         MIRInvertSearchOpt opt = { .w=w, .h=h, .ws=ws, .hs=hs, .patch_size=patch_size, .patch_stride=patch_stride, .border_size=border_size};
-        commandBuffer = [MIRInvertSearch encode_fw1:commandBuffer U:U I0:I0 I1:I1_ext S:S opt:opt];
+        commandBuffer = [MIRInvertSearch encode_fwd1:commandBuffer U:U I0:I0 I1:I1_ext S:S opt:opt];
     }
     
     [commandBuffer commit];

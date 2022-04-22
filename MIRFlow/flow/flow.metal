@@ -273,6 +273,79 @@ float computeSSDMeanNorm(constant uchar *I0_ptr,
 }
 
 
+float4 processPatchMeanNorm(constant uchar *I0_ptr,
+                            constant uchar *I1_ptr,
+                            constant short *I0x_ptr,
+                            constant short *I0y_ptr,
+                            int patch_size,
+                            int I0_stride, int I1_stride,
+                            float w00, float w01, float w10, float w11,
+                            float x_grad_sum, float y_grad_sum
+                            ) {
+    const float inv_n = 1.0f / (float)(patch_size * patch_size);
+    
+    float sum_diff = 0.0, sum_diff_sq = 0.0;
+    float sum_I0x_mul = 0.0, sum_I0y_mul = 0.0;
+    
+    uchar4 I1_vec2_lo = *I1_ptr;
+    uchar4 I1_vec2_p_lo = *(I1_ptr + 1);
+    uchar4 I1_vec2_hi = *(I1_ptr + 4);
+    uchar4 I1_vec2_p_hi = *(I1_ptr + 5);
+    
+    for (int i = 0; i < 8; i++)
+    {
+        float4 vec_lo, vec_hi;
+        {
+            
+            uchar4 I0_vec_lo = *(I0_ptr + i * I0_stride);
+            
+            uchar4 I1_vec1_lo = I1_vec2_lo;
+            uchar4 I1_vec1_p_lo = I1_vec2_p_lo;
+            
+            I1_vec2_lo = *(I1_ptr + (i + 1) * I1_stride);
+            I1_vec2_p_lo = *(I1_ptr + (i + 1) * I1_stride + 1);
+            
+            vec_lo = w00 * float4(I1_vec1_lo) + w01 * float4(I1_vec1_p_lo) +
+            w10 * float4(I1_vec2_lo) + w11 * float4(I1_vec2_p_lo) -
+            float4(I0_vec_lo);
+        }
+        {
+            uchar4 I0_vec_hi = *(I0_ptr + i * I0_stride + 4);
+            
+            uchar4 I1_vec1_hi = I1_vec2_hi;
+            uchar4 I1_vec1_p_hi = I1_vec2_hi;
+            
+            I1_vec2_hi = *(I1_ptr + (i + 1) * I1_stride + 4);
+            I1_vec2_p_hi = *(I1_ptr + (i + 1) * I1_stride + 5);
+            
+            vec_hi = w00 * float4(I1_vec1_hi) + w01 * float4(I1_vec1_p_hi) +
+            w10 * float4(I1_vec2_hi) + w11 * float4(I1_vec2_p_hi) -
+            float4(I0_vec_hi);
+        }
+        
+        sum_diff += (dot(vec_lo, 1.0) + dot(vec_hi, 1.0));
+        sum_diff_sq += (dot(vec_lo, vec_lo) + dot(vec_hi, vec_hi));
+        
+        short4 I0x_vec_lo = *(I0x_ptr + i * I0_stride);
+        short4 I0x_vec_hi = *(I0x_ptr + i * I0_stride + 4);
+        short4 I0y_vec_lo = *(I0y_ptr + i * I0_stride);
+        short4 I0y_vec_hi = *(I0y_ptr + i * I0_stride + 4);
+        
+        sum_I0x_mul += dot(vec_lo, float4(I0x_vec_lo));
+        sum_I0x_mul += dot(vec_hi, float4(I0x_vec_hi));
+        sum_I0y_mul += dot(vec_lo, float4(I0y_vec_lo));
+        sum_I0y_mul += dot(vec_hi, float4(I0y_vec_hi));
+    }
+    
+    float dst_dUx = sum_I0x_mul - sum_diff * x_grad_sum * inv_n;
+    float dst_dUy = sum_I0y_mul - sum_diff * y_grad_sum * inv_n;
+    float SSD = sum_diff_sq - sum_diff * sum_diff * inv_n;
+    
+    float4 r = float4(SSD, dst_dUx, dst_dUy, 0);
+    return r;
+}
+
+
 kernel void MIRFlow_invertSearch_fwd1(constant vector_float2 *U_ptr [[ buffer(MIRInvertSearch_U) ]],
                                       constant uchar *I0_ptr [[ buffer(MIRInvertSearch_I0) ]],
                                       constant uchar *I1_ptr [[ buffer(MIRInvertSearch_I1) ]],
@@ -321,79 +394,6 @@ kernel void MIRFlow_invertSearch_fwd1(constant vector_float2 *U_ptr [[ buffer(MI
 }
 
 
-float4 processPatchMeanNorm(constant uchar *I0_ptr,
-                            constant uchar *I1_ptr,
-                            constant short *I0x_ptr,
-                            constant short *I0y_ptr,
-                            int patch_size,
-                            int I0_stride, int I1_stride,
-                            float w00, float w01, float w10, float w11,
-                            float x_grad_sum, float y_grad_sum
-                            ) {
-    const float inv_n = 1.0f / (float)(patch_size * patch_size);
-
-    float sum_diff = 0.0, sum_diff_sq = 0.0;
-    float sum_I0x_mul = 0.0, sum_I0y_mul = 0.0;
-
-    uchar4 I1_vec2_lo = *I1_ptr;
-    uchar4 I1_vec2_p_lo = *(I1_ptr + 1);
-    uchar4 I1_vec2_hi = *(I1_ptr + 4);
-    uchar4 I1_vec2_p_hi = *(I1_ptr + 5);
-
-    for (int i = 0; i < 8; i++)
-    {
-        float4 vec_lo, vec_hi;
-        {
-            
-            uchar4 I0_vec_lo = *(I0_ptr + i * I0_stride);
-            
-            uchar4 I1_vec1_lo = I1_vec2_lo;
-            uchar4 I1_vec1_p_lo = I1_vec2_p_lo;
-            
-            I1_vec2_lo = *(I1_ptr + (i + 1) * I1_stride);
-            I1_vec2_p_lo = *(I1_ptr + (i + 1) * I1_stride + 1);
-            
-            vec_lo = w00 * float4(I1_vec1_lo) + w01 * float4(I1_vec1_p_lo) +
-            w10 * float4(I1_vec2_lo) + w11 * float4(I1_vec2_p_lo) -
-            float4(I0_vec_lo);
-        }
-        {
-            uchar4 I0_vec_hi = *(I0_ptr + i * I0_stride + 4);
-            
-            uchar4 I1_vec1_hi = I1_vec2_hi;
-            uchar4 I1_vec1_p_hi = I1_vec2_hi;
-            
-            I1_vec2_hi = *(I1_ptr + (i + 1) * I1_stride + 4);
-            I1_vec2_p_hi = *(I1_ptr + (i + 1) * I1_stride + 5);
-            
-            vec_hi = w00 * float4(I1_vec1_hi) + w01 * float4(I1_vec1_p_hi) +
-            w10 * float4(I1_vec2_hi) + w11 * float4(I1_vec2_p_hi) -
-            float4(I0_vec_hi);
-        }
-
-        sum_diff += (dot(vec_lo, 1.0) + dot(vec_hi, 1.0));
-        sum_diff_sq += (dot(vec_lo, vec_lo) + dot(vec_hi, vec_hi));
-
-        short4 I0x_vec_lo = *(I0x_ptr + i * I0_stride);
-        short4 I0x_vec_hi = *(I0x_ptr + i * I0_stride + 4);
-        short4 I0y_vec_lo = *(I0y_ptr + i * I0_stride);
-        short4 I0y_vec_hi = *(I0y_ptr + i * I0_stride + 4);
-
-        sum_I0x_mul += dot(vec_lo, float4(I0x_vec_lo));
-        sum_I0x_mul += dot(vec_hi, float4(I0x_vec_hi));
-        sum_I0y_mul += dot(vec_lo, float4(I0y_vec_lo));
-        sum_I0y_mul += dot(vec_hi, float4(I0y_vec_hi));
-    }
-
-    float dst_dUx = sum_I0x_mul - sum_diff * x_grad_sum * inv_n;
-    float dst_dUy = sum_I0y_mul - sum_diff * y_grad_sum * inv_n;
-    float SSD = sum_diff_sq - sum_diff * sum_diff * inv_n;
-    
-    float4 r = float4(SSD, dst_dUx, dst_dUy, 0);
-    return r;
-}
-
-
 kernel void MIRFlow_invertSearch_fwd2(constant vector_float2 *U_ptr [[ buffer(MIRInvertSearch_U) ]],
                                       constant uchar *I0_ptr [[ buffer(MIRInvertSearch_I0) ]],
                                       constant uchar *I1_ptr [[ buffer(MIRInvertSearch_I1) ]],
@@ -405,9 +405,9 @@ kernel void MIRFlow_invertSearch_fwd2(constant vector_float2 *U_ptr [[ buffer(MI
                                       constant float *x_ptr [[ buffer(MIRInvertSearch_I0x_buf) ]],
                                       constant float *y_ptr [[ buffer(MIRInvertSearch_I0y_buf) ]],
                                       device vector_float2 *S_ptr [[ buffer(MIRInvertSearch_S) ]],
-                                      constant MIRInvertSearchOpt &opt,
-                                      uint2 gid [[ thread_position_in_grid ]])
-{
+                                      constant MIRInvertSearchOpt &opt  [[ buffer(MIRInvertSearch_opt) ]],
+                                      uint2 gid [[ thread_position_in_grid ]]
+                                      ) {
     if (gid.x >= (uint)opt.ws || gid.y >= (uint)opt.hs) {
         return;
     }
@@ -473,4 +473,128 @@ kernel void MIRFlow_invertSearch_fwd2(constant vector_float2 *U_ptr [[ buffer(MI
     
     float2 vec = cur_U - U0;
     S_ptr[index] = (dot(vec, vec) <= (float)(patch_size * patch_size)) ? cur_U : U0;
+}
+
+
+kernel void MIRFlow_invertSearch_bwd1(constant uchar *I0_ptr [[ buffer(MIRInvertSearch_I0) ]],
+                                      constant uchar *I1_ptr [[ buffer(MIRInvertSearch_I1) ]],
+                                      constant MIRInvertSearchOpt &opt  [[ buffer(MIRInvertSearch_opt) ]],
+                                      device vector_float2 *S_ptr [[ buffer(MIRInvertSearch_S) ]],
+                                      uint is [[ threadgroup_position_in_grid ]],
+                                      uint sid [[ thread_position_in_threadgroup ]]
+                                      ) {
+    int w = opt.w, h = opt.h, ws = opt.ws, hs = opt.hs,
+    patch_stride = opt.patch_stride, patch_size = opt.patch_size, border_size = opt.border_size;
+    
+    is = (hs - 1 - is);
+    int i = is * patch_stride;
+    int j = (ws - 2) * patch_stride;
+    const int w_ext = w + 2 * border_size;
+    
+    const float i_lower_limit = border_size - patch_size + 1.0f;
+    const float i_upper_limit = border_size + h - 1.0f;
+    const float j_lower_limit = border_size - patch_size + 1.0f;
+    const float j_upper_limit = border_size + w - 1.0f;
+    
+    threadgroup vector_float2 smem[8];
+    
+    for (int js = (ws - 2); js > -1; js--, j -= patch_stride) {
+        float2 U0 = S_ptr[is * ws + js];
+        float2 U1 = S_ptr[is * ws + js + 1];
+        
+        float i_I1, j_I1, w00, w01, w10, w11;
+        
+        INIT_BILINEAR_WEIGHTS(U0.x, U0.y);
+        float min_SSD = computeSSDMeanNorm(I0_ptr + i * w + j,
+                                           I1_ptr + (int)i_I1 * w_ext + (int)j_I1,
+                                           w, w_ext, patch_size, w00, w01, w10, w11, sid, smem);
+        
+        INIT_BILINEAR_WEIGHTS(U1.x, U1.y);
+        float cur_SSD = computeSSDMeanNorm(
+                                           I0_ptr + i * w + j, I1_ptr + (int)i_I1 * w_ext + (int)j_I1,
+                                           w, w_ext, patch_size, w00, w01, w10, w11, sid, smem);
+        
+        S_ptr[is * ws + js] = (cur_SSD < min_SSD) ? U1 : U0;
+    }
+}
+
+kernel void MIRFlow_invertSearch_bwd2(constant uchar *I0_ptr [[ buffer(MIRInvertSearch_I0) ]],
+                                      constant uchar *I1_ptr [[ buffer(MIRInvertSearch_I1) ]],
+                                      constant short *I0x_ptr [[ buffer(MIRInvertSearch_I0x) ]],
+                                      constant short *I0y_ptr [[ buffer(MIRInvertSearch_I0y) ]],
+                                      constant float *xx_ptr [[ buffer(MIRInvertSearch_I0xx_buf) ]],
+                                      constant float *yy_ptr [[ buffer(MIRInvertSearch_I0yy_buf) ]],
+                                      constant float *xy_ptr [[ buffer(MIRInvertSearch_I0xy_buf) ]],
+                                      constant float *x_ptr [[ buffer(MIRInvertSearch_I0x_buf) ]],
+                                      constant float *y_ptr [[ buffer(MIRInvertSearch_I0y_buf) ]],
+                                      device vector_float2 *S_ptr [[ buffer(MIRInvertSearch_S) ]],
+                                      constant MIRInvertSearchOpt &opt [[ buffer(MIRInvertSearch_opt) ]],
+                                      uint2 gid [[ thread_position_in_grid ]]
+                                      ) {
+    if (gid.x >= (uint)opt.ws || gid.y >= (uint)opt.hs) {
+        return;
+    }
+    int w = opt.w, h = opt.h, ws = opt.ws, hs = opt.hs,
+    patch_stride = opt.patch_stride, patch_size = opt.patch_size, border_size = opt.border_size,
+    num_inner_iter = opt.num_inner_iter;
+    
+    int js = gid.y;
+    int is = gid.x;
+    
+    js = (ws - 1 - js);
+    is = (hs - 1 - is);
+    
+    int j = js * patch_stride;
+    int i = is * patch_stride;
+    int w_ext = w + 2 * border_size;
+    int index = is * ws + js;
+    
+    float2 U0 = S_ptr[index];
+    float2 cur_U = U0;
+    float cur_xx = xx_ptr[index];
+    float cur_yy = yy_ptr[index];
+    float cur_xy = xy_ptr[index];
+    float detH = cur_xx * cur_yy - cur_xy * cur_xy;
+    
+    float inv_detH = (fabs(detH) < EPS) ? 1.0 / EPS : 1.0 / detH;
+    float invH11 = cur_yy * inv_detH;
+    float invH12 = -cur_xy * inv_detH;
+    float invH22 = cur_xx * inv_detH;
+    
+    float prev_SSD = INF;
+    float x_grad_sum = x_ptr[index];
+    float y_grad_sum = y_ptr[index];
+    
+    const float i_lower_limit = border_size - patch_size + 1.0f;
+    const float i_upper_limit = border_size + h - 1.0f;
+    const float j_lower_limit = border_size - patch_size + 1.0f;
+    const float j_upper_limit = border_size + w - 1.0f;
+    
+    for (int t = 0; t < num_inner_iter; t++)
+    {
+        float i_I1, j_I1, w00, w01, w10, w11;
+        INIT_BILINEAR_WEIGHTS(cur_U.x, cur_U.y);
+        float4 res = processPatchMeanNorm(I0_ptr  + i * w + j,
+                                          I1_ptr + (int)i_I1 * w_ext + (int)j_I1,
+                                          I0x_ptr + i * w + j,
+                                          I0y_ptr + i * w + j,
+                                          patch_size,
+                                          w, w_ext, w00, w01, w10, w11,
+                                          x_grad_sum, y_grad_sum);
+        
+        float SSD = res.x;
+        float dUx = res.y;
+        float dUy = res.z;
+        float dx = invH11 * dUx + invH12 * dUy;
+        float dy = invH12 * dUx + invH22 * dUy;
+        
+        cur_U -= float2(dx, dy);
+        
+        if (SSD >= prev_SSD)
+            break;
+        prev_SSD = SSD;
+    }
+    
+    float2 vec = cur_U - U0;
+    S_ptr[index] = ((dot(vec, vec)) <= (float)(patch_size * patch_size)) ? cur_U : U0;
 }

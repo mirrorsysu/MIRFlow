@@ -74,5 +74,21 @@ typedef struct MIRInvertSearchOpt {
     int num_inner_iter;
 } MIRInvertSearchOpt;
 
+typedef enum {
+    MIRDensification_S = 0,
+    MIRDensification_I0,
+    MIRDensification_I1,
+    MIRDensification_opt,
+    MIRDensification_U,
+} MIRDensificationParam;
+
+typedef struct MIRDensificationOpt {
+    int w;
+    int h;
+    int patch_size;
+    int patch_stride;
+    int ws;
+} MIRDensificationOpt;
+
 
 #endif /* MIRFlowShaderTypes_h */

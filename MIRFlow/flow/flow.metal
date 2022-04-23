@@ -16,18 +16,48 @@ using namespace metal;
 
 constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
 
-kernel void MIRFlow_resizeUChar(texture2d<half, access::sample> texture,
-                                device uchar *dst [[ buffer(0) ]],
-                                constant int &width [[ buffer(1) ]],
-                                constant int &height [[ buffer(2) ]],
-                                uint2 gid [[ thread_position_in_grid ]]
-                                ) {
+kernel void MIRFlow_grayscaleInput(texture2d<half, access::sample> texture,
+                                   device uchar *dst [[ buffer(0) ]],
+                                   constant int &width [[ buffer(1) ]],
+                                   constant int &height [[ buffer(2) ]],
+                                   uint2 gid [[ thread_position_in_grid ]]
+                                   ) {
     if (gid.x >= (uint)width || gid.y >= (uint)height) {
         return;
     }
     
     half a = texture.sample(textureSampler, float2(gid) / float2(width, height)).a;
     dst[gid.y * width + gid.x] = (uchar)(a * 255);
+}
+
+kernel void MIRFlow_resizeU(constant vector_float2 *src [[ buffer(0) ]],
+                            device vector_float2 *dst [[ buffer(1) ]],
+                            constant int &dstW [[ buffer(2) ]],
+                            constant int &dstH [[ buffer(3) ]],
+                            uint2 gid [[ thread_position_in_grid ]]
+                            ) {
+    if (gid.x >= (uint)dstW || gid.y >= (uint)dstH) {
+        return;
+    }
+    int srcW = dstW / 2;
+    int srcH = dstH / 2;
+    
+    float2 pos = float2(gid) / float2(dstW, dstH) * float2(srcW, srcH);
+    float u = fract(pos.x);
+    float v = fract(pos.y);
+    int2 i00 = int2(floor(pos));
+    int2 i01 = int2(min(int(floor(pos.x) + 1), srcW-1), floor(pos.y));
+    int2 i10 = int2(pos.x, min(int(floor(pos.y) + 1), srcH-1));
+    int2 i11 = int2(min(int(floor(pos.x) + 1), srcW-1), min(int(floor(pos.y) + 1), srcH-1));
+    
+#define at(xy) *(src + (xy).y * srcW + (xy).x)
+    vector_float2 v00 = at(i00);
+    vector_float2 v01 = at(i01);
+    vector_float2 v10 = at(i10);
+    vector_float2 v11 = at(i11);
+    vector_float2 r = v00*(1-u)*(1-v) + v01*u*(1-v) + v10*(1-u)*v + v11*u*v;
+#undef at
+    dst[gid.y * dstW + gid.x] = r * 2;
 }
 
 // BORDER_REPLICATE
@@ -203,6 +233,20 @@ kernel void MIRFlow_PrecomputeStructureTensor_ver(constant float *I0xx_aux [[ bu
 #undef at
 }
 
+
+uchar4 vload4c(constant uchar *ptr) {
+    return *((constant uchar4 *)ptr);
+}
+
+short4 vload4s(constant short *ptr) {
+    return *((constant short4 *)ptr);
+}
+
+uchar2 vload2c(constant uchar *ptr) {
+    return *((constant uchar2 *)ptr);
+}
+
+
 #define INIT_BILINEAR_WEIGHTS(Ux, Uy) \
 i_I1 = clamp(i + Uy + border_size, i_lower_limit, i_upper_limit); \
 j_I1 = clamp(j + Ux + border_size, j_lower_limit, j_upper_limit); \
@@ -229,22 +273,22 @@ float computeSSDMeanNorm(constant uchar *I0_ptr,
     
     float4 vec1, vec2;
     {
-        uchar4 I0_vec = *(I0_ptr + i * I0_stride);
-        uchar4 I1_vec1 = *(I1_ptr + i * I1_stride);
-        uchar4 I1_vec1_p = *(I1_ptr + i * I1_stride + 1);
-        uchar4 I1_vec2 = *(I1_ptr + (i + 1) * I1_stride);
-        uchar4 I1_vec2_p = *(I1_ptr + (i + 1) * I1_stride + 1);
+        uchar4 I0_vec = vload4c(I0_ptr + i * I0_stride);
+        uchar4 I1_vec1 = vload4c(I1_ptr + i * I1_stride);
+        uchar4 I1_vec1_p = vload4c(I1_ptr + i * I1_stride + 1);
+        uchar4 I1_vec2 = vload4c(I1_ptr + (i + 1) * I1_stride);
+        uchar4 I1_vec2_p = vload4c(I1_ptr + (i + 1) * I1_stride + 1);
         
         vec1 = w00 * float4(I1_vec1) + w01 * float4(I1_vec1_p)
         + w10 * float4(I1_vec2) + w11 * float4(I1_vec2_p)
         - float4(I0_vec);
     }
     {
-        uchar4 I0_vec = *(I0_ptr + i * I0_stride + 4);
-        uchar4 I1_vec1 = *(I1_ptr + i * I1_stride + 4);
-        uchar4 I1_vec1_p = *(I1_ptr + i * I1_stride + 5);
-        uchar4 I1_vec2 = *(I1_ptr + (i + 1) * I1_stride  + 4);
-        uchar4 I1_vec2_p = *(I1_ptr + (i + 1) * I1_stride + 5);
+        uchar4 I0_vec = vload4c(I0_ptr + i * I0_stride + 4);
+        uchar4 I1_vec1 = vload4c(I1_ptr + i * I1_stride + 4);
+        uchar4 I1_vec1_p = vload4c(I1_ptr + i * I1_stride + 5);
+        uchar4 I1_vec2 = vload4c(I1_ptr + (i + 1) * I1_stride  + 4);
+        uchar4 I1_vec2_p = vload4c(I1_ptr + (i + 1) * I1_stride + 5);
         
         vec2 = w00 * float4(I1_vec1) + w01 * float4(I1_vec1_p)
         + w10 * float4(I1_vec2) + w11 * float4(I1_vec2_p)
@@ -287,36 +331,36 @@ float4 processPatchMeanNorm(constant uchar *I0_ptr,
     float sum_diff = 0.0, sum_diff_sq = 0.0;
     float sum_I0x_mul = 0.0, sum_I0y_mul = 0.0;
     
-    uchar4 I1_vec2_lo = *I1_ptr;
-    uchar4 I1_vec2_p_lo = *(I1_ptr + 1);
-    uchar4 I1_vec2_hi = *(I1_ptr + 4);
-    uchar4 I1_vec2_p_hi = *(I1_ptr + 5);
+    uchar4 I1_vec2_lo = vload4c(I1_ptr);
+    uchar4 I1_vec2_p_lo = vload4c(I1_ptr + 1);
+    uchar4 I1_vec2_hi = vload4c(I1_ptr + 4);
+    uchar4 I1_vec2_p_hi = vload4c(I1_ptr + 5);
     
     for (int i = 0; i < 8; i++)
     {
         float4 vec_lo, vec_hi;
         {
             
-            uchar4 I0_vec_lo = *(I0_ptr + i * I0_stride);
+            uchar4 I0_vec_lo = vload4c(I0_ptr + i * I0_stride);
             
             uchar4 I1_vec1_lo = I1_vec2_lo;
             uchar4 I1_vec1_p_lo = I1_vec2_p_lo;
             
-            I1_vec2_lo = *(I1_ptr + (i + 1) * I1_stride);
-            I1_vec2_p_lo = *(I1_ptr + (i + 1) * I1_stride + 1);
+            I1_vec2_lo = vload4c(I1_ptr + (i + 1) * I1_stride);
+            I1_vec2_p_lo = vload4c(I1_ptr + (i + 1) * I1_stride + 1);
             
             vec_lo = w00 * float4(I1_vec1_lo) + w01 * float4(I1_vec1_p_lo) +
             w10 * float4(I1_vec2_lo) + w11 * float4(I1_vec2_p_lo) -
             float4(I0_vec_lo);
         }
         {
-            uchar4 I0_vec_hi = *(I0_ptr + i * I0_stride + 4);
+            uchar4 I0_vec_hi = vload4c(I0_ptr + i * I0_stride + 4);
             
             uchar4 I1_vec1_hi = I1_vec2_hi;
             uchar4 I1_vec1_p_hi = I1_vec2_hi;
             
-            I1_vec2_hi = *(I1_ptr + (i + 1) * I1_stride + 4);
-            I1_vec2_p_hi = *(I1_ptr + (i + 1) * I1_stride + 5);
+            I1_vec2_hi = vload4c(I1_ptr + (i + 1) * I1_stride + 4);
+            I1_vec2_p_hi = vload4c(I1_ptr + (i + 1) * I1_stride + 5);
             
             vec_hi = w00 * float4(I1_vec1_hi) + w01 * float4(I1_vec1_p_hi) +
             w10 * float4(I1_vec2_hi) + w11 * float4(I1_vec2_p_hi) -
@@ -326,10 +370,10 @@ float4 processPatchMeanNorm(constant uchar *I0_ptr,
         sum_diff += (dot(vec_lo, 1.0) + dot(vec_hi, 1.0));
         sum_diff_sq += (dot(vec_lo, vec_lo) + dot(vec_hi, vec_hi));
         
-        short4 I0x_vec_lo = *(I0x_ptr + i * I0_stride);
-        short4 I0x_vec_hi = *(I0x_ptr + i * I0_stride + 4);
-        short4 I0y_vec_lo = *(I0y_ptr + i * I0_stride);
-        short4 I0y_vec_hi = *(I0y_ptr + i * I0_stride + 4);
+        short4 I0x_vec_lo = vload4s(I0x_ptr + i * I0_stride);
+        short4 I0x_vec_hi = vload4s(I0x_ptr + i * I0_stride + 4);
+        short4 I0y_vec_lo = vload4s(I0y_ptr + i * I0_stride);
+        short4 I0y_vec_hi = vload4s(I0y_ptr + i * I0_stride + 4);
         
         sum_I0x_mul += dot(vec_lo, float4(I0x_vec_lo));
         sum_I0x_mul += dot(vec_hi, float4(I0x_vec_hi));
@@ -374,7 +418,7 @@ kernel void MIRFlow_invertSearch_fwd1(constant vector_float2 *U_ptr [[ buffer(MI
     
     for (int js = 1; js < ws; js++, j += patch_stride)
     {
-        float2 U = U_ptr[(i + patchSizeHalf) * w + j + patchSizeHalf];
+        vector_float2 U = U_ptr[(i + patchSizeHalf) * w + j + patchSizeHalf];
         
         float i_I1, j_I1, w00, w01, w10, w11;
         
@@ -415,11 +459,11 @@ kernel void MIRFlow_invertSearch_fwd2(constant vector_float2 *U_ptr [[ buffer(MI
     patch_stride = opt.patch_stride, patch_size = opt.patch_size, border_size = opt.border_size,
     num_inner_iter = opt.num_inner_iter;
     
-    int js = gid.y;
-    int is = gid.x;
+    int js = gid.x;
+    int is = gid.y;
     int i = is * patch_stride;
     int j = js *  patch_stride;
-//    const int psz =  patch_size;
+    //    const int psz =  patch_size;
     int w_ext = w + 2 * border_size;
     int index = is * ws + js;
     
@@ -499,8 +543,8 @@ kernel void MIRFlow_invertSearch_bwd1(constant uchar *I0_ptr [[ buffer(MIRInvert
     threadgroup vector_float2 smem[8];
     
     for (int js = (ws - 2); js > -1; js--, j -= patch_stride) {
-        float2 U0 = S_ptr[is * ws + js];
-        float2 U1 = S_ptr[is * ws + js + 1];
+        vector_float2 U0 = S_ptr[is * ws + js];
+        vector_float2 U1 = S_ptr[is * ws + js + 1];
         
         float i_I1, j_I1, w00, w01, w10, w11;
         
@@ -538,8 +582,8 @@ kernel void MIRFlow_invertSearch_bwd2(constant uchar *I0_ptr [[ buffer(MIRInvert
     patch_stride = opt.patch_stride, patch_size = opt.patch_size, border_size = opt.border_size,
     num_inner_iter = opt.num_inner_iter;
     
-    int js = gid.y;
-    int is = gid.x;
+    int js = gid.x;
+    int is = gid.y;
     
     js = (ws - 1 - js);
     is = (hs - 1 - is);
@@ -597,4 +641,72 @@ kernel void MIRFlow_invertSearch_bwd2(constant uchar *I0_ptr [[ buffer(MIRInvert
     
     float2 vec = cur_U - U0;
     S_ptr[index] = ((dot(vec, vec)) <= (float)(patch_size * patch_size)) ? cur_U : U0;
+}
+
+kernel void MIRFlow_densification(constant vector_float2 *S_ptr [[ buffer(MIRDensification_S) ]],
+                                  constant uchar *i0 [[ buffer(MIRDensification_I0) ]],
+                                  constant uchar *i1 [[ buffer(MIRDensification_I1) ]],
+                                  constant MIRDensificationOpt &opt [[ buffer(MIRDensification_opt) ]],
+                                  device vector_float2 *U_ptr [[ buffer(MIRDensification_U) ]],
+                                  uint2 gid [[ thread_position_in_grid ]]
+                                  ) {
+    if (gid.x >= (uint)opt.w || gid.y >= (uint)opt.h) {
+        return;
+    }
+    int w = opt.w, h = opt.h, ws = opt.ws,
+    patch_stride = opt.patch_stride, patch_size = opt.patch_size;
+    
+    int x = gid.x;
+    int y = gid.y;
+    int i, j;
+    
+    if (x >= w || y >= h) return;
+    
+    int start_is, end_is;
+    int start_js, end_js;
+    
+    end_is = min(y / patch_stride, (h - patch_size) / patch_stride);
+    start_is = max(0, y - patch_size + patch_stride) / patch_stride;
+    start_is = min(start_is, end_is);
+    
+    end_js = min(x / patch_stride, (w - patch_size) / patch_stride);
+    start_js = max(0, x - patch_size + patch_stride) / patch_stride;
+    start_js = min(start_js, end_js);
+    
+    float sum_coef = 0.0f;
+    float2 sum_U = float2(0.0f, 0.0f);
+    
+    int i_l, i_u;
+    int j_l, j_u;
+    float i_m, j_m, diff;
+    
+    i = y;
+    j = x;
+    
+    /* Iterate through all the patches that overlap the current location (i,j) */
+    for (int is = start_is; is <= end_is; is++)
+        for (int js = start_js; js <= end_js; js++)
+        {
+            float2 s_val = S_ptr[is * ws + js];
+            uchar2 i1_vec1, i1_vec2;
+            
+            j_m = min(max(j + s_val.x, 0.0f), w - 1.0f - EPS);
+            i_m = min(max(i + s_val.y, 0.0f), h - 1.0f - EPS);
+            j_l = (int)j_m;
+            j_u = j_l + 1;
+            i_l = (int)i_m;
+            i_u = i_l + 1;
+            i1_vec1 = vload2c(i1 + i_u * w + j_l);
+            i1_vec2 = vload2c(i1 + i_l * w + j_l);
+            diff = (j_m - j_l) * (i_m - i_l) * i1_vec1.y +
+            (j_u - j_m) * (i_m - i_l) * i1_vec1.x +
+            (j_m - j_l) * (i_u - i_m) * i1_vec2.y +
+            (j_u - j_m) * (i_u - i_m) * i1_vec2.x - i0[i * w + j];
+            float coef = 1.0f / max(1.0f, fabs(diff));
+            sum_U += coef * s_val;
+            sum_coef += coef;
+        }
+    
+    float inv_sum_coef = 1.0 / sum_coef;
+    U_ptr[i * w + j] = sum_U * inv_sum_coef;
 }

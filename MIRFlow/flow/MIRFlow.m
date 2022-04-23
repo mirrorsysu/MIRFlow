@@ -12,6 +12,7 @@
 #import "MIRSpatialGradient.h"
 #import "MIRPrecomputeStructureTensor.h"
 #import "MIRInvertSearch.h"
+#import "MIRDensification.h"
 
 @interface MIRFlow () {
     int _coarsest_scale;
@@ -98,11 +99,37 @@
     return commandBuffer;
 }
 
-+ (id<MTLCommandBuffer>)resizeUchar:(id<MTLCommandBuffer>)commandBuffer texture:(id<MTLTexture>)texture buffer:(id<MTLBuffer>)buffer width:(int)width height:(int)height {
++ (id<MTLCommandBuffer>)resizeU:(id<MTLCommandBuffer>)commandBuffer
+                            src:(id<MTLBuffer>)src
+                            dst:(id<MTLBuffer>)dst
+                           dstW:(int)dstW
+                           dstH:(int)dstH {
     {
         id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
-        [encoder setLabel:@"MIRFlow_resizeUChar"];
-        id<MTLComputePipelineState> pso = [MIRMetalContext computePSOWithFuncName:@"MIRFlow_resizeUChar"];
+        [encoder setLabel:@"MIRFlow_resizeU"];
+        id<MTLComputePipelineState> pso = [MIRMetalContext computePSOWithFuncName:@"MIRFlow_resizeU"];
+        [encoder setComputePipelineState:pso];
+        
+        [encoder setBuffer:src offset:0 atIndex:0];
+        [encoder setBuffer:dst offset:0 atIndex:1];
+        [encoder setBytes:&dstW length:sizeof(int) atIndex:2];
+        [encoder setBytes:&dstH length:sizeof(int) atIndex:3];
+        
+        MTLSize threadgroupSize = MTLSizeMake(16, 16, 1);
+        MTLSize threadgroupCount = MTLSizeMake((dstW + threadgroupSize.width - 1) / threadgroupSize.width,
+                                               (dstH + threadgroupSize.height - 1) / threadgroupSize.height,
+                                               1);
+        [encoder dispatchThreadgroups:threadgroupCount threadsPerThreadgroup:threadgroupSize];
+        [encoder endEncoding];
+    }
+    return commandBuffer;
+}
+
++ (id<MTLCommandBuffer>)grayscaleInput:(id<MTLCommandBuffer>)commandBuffer texture:(id<MTLTexture>)texture buffer:(id<MTLBuffer>)buffer width:(int)width height:(int)height {
+    {
+        id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
+        [encoder setLabel:@"MIRFlow_grayscaleInput"];
+        id<MTLComputePipelineState> pso = [MIRMetalContext computePSOWithFuncName:@"MIRFlow_grayscaleInput"];
         [encoder setComputePipelineState:pso];
         
         [encoder setTexture:texture atIndex:0];
@@ -199,13 +226,13 @@
             _I0ys[i] = [MIRMetalContext.device newBufferWithLength:cur_rows * cur_cols * sizeof(short) options:MTLResourceStorageModeShared];
             
             _Us[i] = [MIRMetalContext.device newBufferWithLength:cur_rows * cur_cols * sizeof(vector_float2) options:MTLResourceStorageModeShared];
-
+            
             // TODO: xxx
-//            variational_refinement_processors[i]->setAlpha(variational_refinement_alpha);
-//            variational_refinement_processors[i]->setDelta(variational_refinement_delta);
-//            variational_refinement_processors[i]->setGamma(variational_refinement_gamma);
-//            variational_refinement_processors[i]->setSorIterations(5);
-//            variational_refinement_processors[i]->setFixedPointIterations(variational_refinement_iter);
+            //            variational_refinement_processors[i]->setAlpha(variational_refinement_alpha);
+            //            variational_refinement_processors[i]->setDelta(variational_refinement_delta);
+            //            variational_refinement_processors[i]->setGamma(variational_refinement_gamma);
+            //            variational_refinement_processors[i]->setSorIterations(5);
+            //            variational_refinement_processors[i]->setFixedPointIterations(variational_refinement_iter);
         }
         
         if (i == _coarsest_scale) {
@@ -220,20 +247,20 @@
 - (id<MTLCommandBuffer>)prepareBuffer:(id<MTLCommandBuffer>)commandBuffer {
     int fraction = 1;
     int cur_rows = 0, cur_cols = 0;
-
+    
     for (int i = 0; i <= _coarsest_scale; i++) {
         if (i == _finest_scale) {
             cur_rows = _inputH / fraction;
             cur_cols = _inputW / fraction;
             
-            commandBuffer = [self.class resizeUchar:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
-            commandBuffer =[self.class resizeUchar:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
+            commandBuffer = [self.class grayscaleInput:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
+            commandBuffer =[self.class grayscaleInput:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
         } else if (i > _finest_scale) {
             cur_rows /= 2;
             cur_cols /= 2;
             commandBuffer = [self.class copyMakeBorder:commandBuffer texture:_I1 buffer:_I1s_ext[i] width:cur_cols height:cur_rows border:_border_size];
-            commandBuffer = [self.class resizeUchar:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
-            commandBuffer = [self.class resizeUchar:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
+            commandBuffer = [self.class grayscaleInput:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
+            commandBuffer = [self.class grayscaleInput:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
         }
         
         if (i >= _finest_scale) {
@@ -276,7 +303,7 @@
             commandBuffer = [MIRPrecomputeStructureTensor encode:commandBuffer I0x:_I0xs[i] I0y:_I0ys[i] I0xx_aux:_I0xx_aux I0yy_aux:_I0yy_aux I0xy_aux:_I0xy_aux I0x_aux:_I0x_aux I0y_aux:_I0y_aux I0xx_buf:_I0xx_buf I0yy_buf:_I0yy_buf I0xy_buf:_I0xy_buf I0x_buf:_I0x_buf I0y_buf:
                              _I0y_buf opt:opt];
         }
-
+        
         {
             int num_inner_iter = (int)floor(_grad_descent_iter / (float)_num_iter);
             MIRInvertSearchOpt opt = {
@@ -299,24 +326,28 @@
                 }
             }
         }
-//        if (!ocl_Densification(u_U[i], u_S, u_I0s[i], u_I1s[i]))
-//            return false;
-//        
-//        if (variational_refinement_iter > 0)
-//        {
-//            std::vector<Mat> U_channels;
-//            split(u_U[i], U_channels); CV_Assert(U_channels.size() == 2);
-//            variational_refinement_processors[i]->calcUV(u_I0s[i], u_I1s[i],
-//                                                         U_channels[0], U_channels[1]);
-//            merge(U_channels, u_U[i]);
-//        }
-//        
-//        if (i > finest_scale)
-//        {
-//            UMat resized;
-//            resize(u_U[i], resized, u_U[i - 1].size());
-//            multiply(resized, 2, u_U[i - 1]);
-//        }
+        {
+            MIRDensificationOpt opt = {
+                .w = _w,
+                .h = _h,
+                .patch_size = _patch_size,
+                .patch_stride = _patch_stride,
+                .ws = _ws
+            };
+            commandBuffer = [MIRDensification encode:commandBuffer S:_S I0:_I0s[i] I1:_I1s[i] U:_Us[i] opt:opt];
+        }
+        //        if (variational_refinement_iter > 0)
+        //        {
+        //            std::vector<Mat> U_channels;
+        //            split(u_U[i], U_channels); CV_Assert(U_channels.size() == 2);
+        //            variational_refinement_processors[i]->calcUV(u_I0s[i], u_I1s[i],
+        //                                                         U_channels[0], U_channels[1]);
+        //            merge(U_channels, u_U[i]);
+        //        }
+        //
+        if (i > _finest_scale) {
+            commandBuffer = [self.class resizeU:commandBuffer src:_Us[i] dst:_Us[i - 1] dstW:_w*2 dstH:_h*2];
+        }
     }
     
     return commandBuffer;

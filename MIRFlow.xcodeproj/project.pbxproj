@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		0379690E2813E69A00C4A5FA /* MIRDensification.m in Sources */ = {isa = PBXBuildFile; fileRef = 0379690C2813E69900C4A5FA /* MIRDensification.m */; };
 		03EA9DF2280AD88900E3AF33 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 03EA9DF1280AD88900E3AF33 /* main.m */; };
 		03EA9E13280AD92300E3AF33 /* flow.metal in Sources */ = {isa = PBXBuildFile; fileRef = 03EA9E12280AD92300E3AF33 /* flow.metal */; };
 		159EC06A280FCBA500B06389 /* MIRSpatialGradient.m in Sources */ = {isa = PBXBuildFile; fileRef = 159EC069280FCBA500B06389 /* MIRSpatialGradient.m */; };
@@ -21,8 +22,8 @@
 		03EA9DEC280AD88900E3AF33 /* CopyFiles */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
-			dstPath = /usr/share/man/man1/;
-			dstSubfolderSpec = 0;
+			dstPath = "";
+			dstSubfolderSpec = 16;
 			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 1;
@@ -30,6 +31,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		0379690C2813E69900C4A5FA /* MIRDensification.m */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.objc; path = MIRDensification.m; sourceTree = "<group>"; };
+		0379690D2813E69A00C4A5FA /* MIRDensification.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = MIRDensification.h; sourceTree = "<group>"; };
+		037969112813F6CF00C4A5FA /* 1.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 1.png; sourceTree = "<group>"; };
+		037969122813F6CF00C4A5FA /* 0.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 0.png; sourceTree = "<group>"; };
 		03EA9DEE280AD88900E3AF33 /* MIRFlow */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = MIRFlow; sourceTree = BUILT_PRODUCTS_DIR; };
 		03EA9DF1280AD88900E3AF33 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		03EA9E12280AD92300E3AF33 /* flow.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = flow.metal; sourceTree = "<group>"; };
@@ -78,6 +83,8 @@
 		03EA9DF0280AD88900E3AF33 /* MIRFlow */ = {
 			isa = PBXGroup;
 			children = (
+				037969122813F6CF00C4A5FA /* 0.png */,
+				037969112813F6CF00C4A5FA /* 1.png */,
 				03EA9E10280AD90900E3AF33 /* misc */,
 				03EA9E11280AD91500E3AF33 /* flow */,
 				03EA9DF1280AD88900E3AF33 /* main.m */,
@@ -106,6 +113,8 @@
 				15F3B051280E7CE40077FAF1 /* MIRInvertSearch.m */,
 				159EC068280FCBA500B06389 /* MIRSpatialGradient.h */,
 				159EC069280FCBA500B06389 /* MIRSpatialGradient.m */,
+				0379690D2813E69A00C4A5FA /* MIRDensification.h */,
+				0379690C2813E69900C4A5FA /* MIRDensification.m */,
 			);
 			path = flow;
 			sourceTree = "<group>";
@@ -183,6 +192,7 @@
 				159EC06A280FCBA500B06389 /* MIRSpatialGradient.m in Sources */,
 				15F3B028280E7A260077FAF1 /* MIRFlow.m in Sources */,
 				15F3B042280E7A6C0077FAF1 /* MIRMetal.metal in Sources */,
+				0379690E2813E69A00C4A5FA /* MIRDensification.m in Sources */,
 				03EA9E13280AD92300E3AF33 /* flow.metal in Sources */,
 				15F3B04F280E7AAA0077FAF1 /* MIRPrecomputeStructureTensor.m in Sources */,
 			);

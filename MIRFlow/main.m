@@ -69,8 +69,8 @@ int main(int argc, const char * argv[]) {
         int h = 2000;
         
         [MIRMetalContext startCapture];
-        id<MTLTexture> I0 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/1.jpg", w, h);
-        id<MTLTexture> I1 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/2.jpeg", w, h);
+        id<MTLTexture> I0 = loadTexture(@"/Users/mirror/Desktop/MIRFlow/MIRFlow/0.png", w, h);
+        id<MTLTexture> I1 = loadTexture(@"/Users/mirror/Desktop/MIRFlow/MIRFlow/1.png", w, h);
         
         MIRFlow *flow = [[MIRFlow alloc] init];
         [flow generateBufferWithWidth:w height:h];
@@ -78,7 +78,12 @@ int main(int argc, const char * argv[]) {
         id<MTLCommandBuffer> commandBuffer = [MIRMetalContext makeCommandBuffer];
         commandBuffer = [flow encode:commandBuffer I0:I0 I1:I1];
         [commandBuffer commit];
+        
+        NSTimeInterval bt = CACurrentMediaTime();
         [commandBuffer waitUntilCompleted];
+        NSTimeInterval et = CACurrentMediaTime();
+        printf("consumed: %f", et - bt);
+        
         [MIRMetalContext stopCapture];
         
     }

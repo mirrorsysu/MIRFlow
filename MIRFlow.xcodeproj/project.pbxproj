@@ -39,6 +39,8 @@
 		03EA9DF1280AD88900E3AF33 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
 		03EA9E12280AD92300E3AF33 /* flow.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = flow.metal; sourceTree = "<group>"; };
 		03EA9E16280AD9E800E3AF33 /* MIRFlowShaderTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MIRFlowShaderTypes.h; sourceTree = "<group>"; };
+		158BAC792815135F00AB10CF /* 9.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 9.png; sourceTree = "<group>"; };
+		158BAC7A2815135F00AB10CF /* 8.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 8.png; sourceTree = "<group>"; };
 		159EC068280FCBA500B06389 /* MIRSpatialGradient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MIRSpatialGradient.h; sourceTree = "<group>"; };
 		159EC069280FCBA500B06389 /* MIRSpatialGradient.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MIRSpatialGradient.m; sourceTree = "<group>"; };
 		15F3B026280E7A260077FAF1 /* MIRFlow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MIRFlow.h; sourceTree = "<group>"; };
@@ -85,6 +87,8 @@
 			children = (
 				037969122813F6CF00C4A5FA /* 0.png */,
 				037969112813F6CF00C4A5FA /* 1.png */,
+				158BAC7A2815135F00AB10CF /* 8.png */,
+				158BAC792815135F00AB10CF /* 9.png */,
 				03EA9E10280AD90900E3AF33 /* misc */,
 				03EA9E11280AD91500E3AF33 /* flow */,
 				03EA9DF1280AD88900E3AF33 /* main.m */,
@@ -103,10 +107,10 @@
 		03EA9E11280AD91500E3AF33 /* flow */ = {
 			isa = PBXGroup;
 			children = (
-				03EA9E12280AD92300E3AF33 /* flow.metal */,
 				03EA9E16280AD9E800E3AF33 /* MIRFlowShaderTypes.h */,
 				15F3B026280E7A260077FAF1 /* MIRFlow.h */,
 				15F3B027280E7A260077FAF1 /* MIRFlow.m */,
+				03EA9E12280AD92300E3AF33 /* flow.metal */,
 				15F3B04D280E7AAA0077FAF1 /* MIRPrecomputeStructureTensor.h */,
 				15F3B04E280E7AAA0077FAF1 /* MIRPrecomputeStructureTensor.m */,
 				15F3B050280E7CE40077FAF1 /* MIRInvertSearch.h */,

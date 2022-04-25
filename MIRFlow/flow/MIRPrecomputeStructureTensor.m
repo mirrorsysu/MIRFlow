@@ -42,7 +42,7 @@
         [encoder setBuffer:I0x_aux offset:0 atIndex:MIRPrecomputeStructureTensor_I0x_aux];
         [encoder setBuffer:I0y_aux offset:0 atIndex:MIRPrecomputeStructureTensor_I0y_aux];
         
-        MTLSize threadgroupSize = MTLSizeMake(pso.maxTotalThreadsPerThreadgroup, 1, 1);
+        MTLSize threadgroupSize = MTLSizeMake(16, 1, 1);
         MTLSize threadgroupCount = MTLSizeMake((opt.h + threadgroupSize.width - 1) / threadgroupSize.width,
                                                1,
                                                1);
@@ -69,7 +69,7 @@
         [encoder setBuffer:I0x_buf offset:0 atIndex:MIRPrecomputeStructureTensor_I0x_buf];
         [encoder setBuffer:I0y_buf offset:0 atIndex:MIRPrecomputeStructureTensor_I0y_buf];
         
-        MTLSize threadgroupSize = MTLSizeMake(pso.maxTotalThreadsPerThreadgroup, 1, 1);
+        MTLSize threadgroupSize = MTLSizeMake(16, 1, 1);
         MTLSize threadgroupCount = MTLSizeMake((opt.ws + threadgroupSize.width - 1) / threadgroupSize.width,
                                                1,
                                                1);

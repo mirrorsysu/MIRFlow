@@ -16,12 +16,47 @@ using namespace metal;
 
 constexpr sampler textureSampler(mag_filter::linear, min_filter::linear);
 
-kernel void MIRFlow_grayscaleInput(texture2d<half, access::sample> texture,
-                                   device uchar *dst [[ buffer(0) ]],
-                                   constant int &width [[ buffer(1) ]],
-                                   constant int &height [[ buffer(2) ]],
-                                   uint2 gid [[ thread_position_in_grid ]]
-                                   ) {
+kernel void MIRFlow_testU(device vector_float2 *input [[ buffer(0) ]],
+                          texture2d<half, access::write> output1 [[ texture(0) ]],
+                          texture2d<half, access::write> output2 [[ texture(1) ]],
+                          constant int &w [[ buffer(1) ]],
+                          constant int &h [[ buffer(2) ]],
+                          uint2 gid [[ thread_position_in_grid ]]
+                          ) {
+    if (gid.x >= (uint)w || gid.y >= (uint)h) {
+        return;
+    }
+    vector_float2 r = input[gid.y * w + gid.x];
+    half l1 = r.x / 20;
+    half l2 = r.y / 20;
+    output1.write(half4(l1, l1, l1, 1), gid);
+    output2.write(half4(l2, l2, l2, 1), gid);
+}
+
+kernel void MIRFlow_testI(device uchar *input [[ buffer(0) ]],
+                          texture2d<half, access::write> output [[ texture(0) ]],
+                          constant int &w [[ buffer(1) ]],
+                          constant int &h [[ buffer(2) ]],
+                          uint2 gid [[ thread_position_in_grid ]]
+                          ) {
+    if (gid.x >= (uint)w || gid.y >= (uint)h) {
+        return;
+    }
+    half r = input[gid.y * w + gid.x] / 255.0;
+    output.write(half4(r, r, r, 1), gid);
+}
+
+struct RasterizerData {
+    float4 position [[position]];
+    float2 textureCoordinate;
+};
+
+kernel void MIRFlow_scaleInput(texture2d<half, access::sample> texture [[ texture(0) ]],
+                               device uchar *dst [[ buffer(0) ]],
+                               constant int &width [[ buffer(1) ]],
+                               constant int &height [[ buffer(2) ]],
+                               uint2 gid [[ thread_position_in_grid ]]
+                               ) {
     if (gid.x >= (uint)width || gid.y >= (uint)height) {
         return;
     }
@@ -47,7 +82,7 @@ kernel void MIRFlow_resizeU(constant vector_float2 *src [[ buffer(0) ]],
     float v = fract(pos.y);
     int2 i00 = int2(floor(pos));
     int2 i01 = int2(min(int(floor(pos.x) + 1), srcW-1), floor(pos.y));
-    int2 i10 = int2(pos.x, min(int(floor(pos.y) + 1), srcH-1));
+    int2 i10 = int2(floor(pos.x), min(int(floor(pos.y) + 1), srcH-1));
     int2 i11 = int2(min(int(floor(pos.x) + 1), srcW-1), min(int(floor(pos.y) + 1), srcH-1));
     
 #define at(xy) *(src + (xy).y * srcW + (xy).x)
@@ -58,10 +93,15 @@ kernel void MIRFlow_resizeU(constant vector_float2 *src [[ buffer(0) ]],
     vector_float2 r = v00*(1-u)*(1-v) + v01*u*(1-v) + v10*(1-u)*v + v11*u*v;
 #undef at
     dst[gid.y * dstW + gid.x] = r * 2;
+    
+    //    if (gid.x >= (uint)srcW || gid.y >= (uint)srcH) {
+    //        return;
+    //    }
+    //    dst[gid.y * dstW + gid.x] = src[gid.y * srcW + gid.x];
 }
 
 // BORDER_REPLICATE
-kernel void MIRFlow_copyMakeBorder(texture2d<half, access::sample> texture,
+kernel void MIRFlow_copyMakeBorder(texture2d<half, access::sample> texture [[ texture(0) ]],
                                    device uchar *dst [[ buffer(0) ]],
                                    constant int &width [[ buffer(1) ]],
                                    constant int &height [[ buffer(2) ]],

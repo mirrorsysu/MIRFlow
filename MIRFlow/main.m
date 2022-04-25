@@ -65,12 +65,12 @@ int main(int argc, const char * argv[]) {
     @autoreleasepool {
         NSLog(@"Hello, World!");
         
-        int w = 2000;
-        int h = 2000;
+        int w = 1080;
+        int h = 1920;
         
         [MIRMetalContext startCapture];
-        id<MTLTexture> I0 = loadTexture(@"/Users/mirror/Desktop/MIRFlow/MIRFlow/0.png", w, h);
-        id<MTLTexture> I1 = loadTexture(@"/Users/mirror/Desktop/MIRFlow/MIRFlow/1.png", w, h);
+        id<MTLTexture> I0 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/摸鱼/MIRFlow/MIRFlow/8.png", w, h);
+        id<MTLTexture> I1 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/摸鱼/MIRFlow/MIRFlow/9.png", w, h);
         
         MIRFlow *flow = [[MIRFlow alloc] init];
         [flow generateBufferWithWidth:w height:h];

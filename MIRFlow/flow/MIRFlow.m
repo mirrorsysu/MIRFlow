@@ -99,6 +99,51 @@
     return commandBuffer;
 }
 
++ (id<MTLCommandBuffer>)testU:(id<MTLCommandBuffer>)commandBuffer input:(id<MTLBuffer>)input output1:(id<MTLTexture>)output1 output2:(id<MTLTexture>)output2 w:(int)w h:(int)h {
+    {
+        id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
+        [encoder setLabel:@"MIRFlow_testU"];
+        id<MTLComputePipelineState> pso = [MIRMetalContext computePSOWithFuncName:@"MIRFlow_testU"];
+        [encoder setComputePipelineState:pso];
+        
+        [encoder setBuffer:input offset:0 atIndex:0];
+        [encoder setTexture:output1 atIndex:0];
+        [encoder setTexture:output2 atIndex:1];
+        [encoder setBytes:&w length:sizeof(int) atIndex:1];
+        [encoder setBytes:&h length:sizeof(int) atIndex:2];
+        
+        MTLSize threadgroupSize = MTLSizeMake(16, 16, 1);
+        MTLSize threadgroupCount = MTLSizeMake((w + threadgroupSize.width - 1) / threadgroupSize.width,
+                                               (h + threadgroupSize.height - 1) / threadgroupSize.height,
+                                               1);
+        [encoder dispatchThreadgroups:threadgroupCount threadsPerThreadgroup:threadgroupSize];
+        [encoder endEncoding];
+    }
+    return commandBuffer;
+}
+
++ (id<MTLCommandBuffer>)testI:(id<MTLCommandBuffer>)commandBuffer input:(id<MTLBuffer>)input output:(id<MTLTexture>)output w:(int)w h:(int)h {
+    {
+        id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
+        [encoder setLabel:@"MIRFlow_testI"];
+        id<MTLComputePipelineState> pso = [MIRMetalContext computePSOWithFuncName:@"MIRFlow_testI"];
+        [encoder setComputePipelineState:pso];
+        
+        [encoder setBuffer:input offset:0 atIndex:0];
+        [encoder setTexture:output atIndex:0];
+        [encoder setBytes:&w length:sizeof(int) atIndex:1];
+        [encoder setBytes:&h length:sizeof(int) atIndex:2];
+        
+        MTLSize threadgroupSize = MTLSizeMake(16, 16, 1);
+        MTLSize threadgroupCount = MTLSizeMake((w + threadgroupSize.width - 1) / threadgroupSize.width,
+                                               (h + threadgroupSize.height - 1) / threadgroupSize.height,
+                                               1);
+        [encoder dispatchThreadgroups:threadgroupCount threadsPerThreadgroup:threadgroupSize];
+        [encoder endEncoding];
+    }
+    return commandBuffer;
+}
+
 + (id<MTLCommandBuffer>)resizeU:(id<MTLCommandBuffer>)commandBuffer
                             src:(id<MTLBuffer>)src
                             dst:(id<MTLBuffer>)dst
@@ -125,11 +170,11 @@
     return commandBuffer;
 }
 
-+ (id<MTLCommandBuffer>)grayscaleInput:(id<MTLCommandBuffer>)commandBuffer texture:(id<MTLTexture>)texture buffer:(id<MTLBuffer>)buffer width:(int)width height:(int)height {
++ (id<MTLCommandBuffer>)scaleInput:(id<MTLCommandBuffer>)commandBuffer texture:(id<MTLTexture>)texture buffer:(id<MTLBuffer>)buffer width:(int)width height:(int)height {
     {
         id<MTLComputeCommandEncoder> encoder = [commandBuffer computeCommandEncoder];
-        [encoder setLabel:@"MIRFlow_grayscaleInput"];
-        id<MTLComputePipelineState> pso = [MIRMetalContext computePSOWithFuncName:@"MIRFlow_grayscaleInput"];
+        [encoder setLabel:@"MIRFlow_scaleInput"];
+        id<MTLComputePipelineState> pso = [MIRMetalContext computePSOWithFuncName:@"MIRFlow_scaleInput"];
         [encoder setComputePipelineState:pso];
         
         [encoder setTexture:texture atIndex:0];
@@ -192,8 +237,8 @@
         [_Us addObject:(id<MTLBuffer>)NSNull.null];
         
         if (i == _finest_scale) {
-            cur_rows = width / fraction;
-            cur_cols = height / fraction;
+            cur_rows = height / fraction;
+            cur_cols = width / fraction;
             
             _I0s[i] = [MIRMetalContext.device newBufferWithLength:cur_rows * cur_cols * sizeof(unsigned char) options:MTLResourceStorageModeShared];
             _I1s[i] = [MIRMetalContext.device newBufferWithLength:cur_rows * cur_cols * sizeof(unsigned char) options:MTLResourceStorageModeShared];
@@ -253,14 +298,41 @@
             cur_rows = _inputH / fraction;
             cur_cols = _inputW / fraction;
             
-            commandBuffer = [self.class grayscaleInput:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
-            commandBuffer =[self.class grayscaleInput:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
+            commandBuffer = [self.class scaleInput:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
+            commandBuffer =[self.class scaleInput:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
+            {   // FIXME: DEBUG
+                int w = cur_cols;
+                int h = cur_rows;
+                MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+                desc.usage = MTLTextureUsageShaderWrite;
+                id<MTLTexture> texture = [MIRMetalContext.device newTextureWithDescriptor:desc];
+                commandBuffer = [self.class testI:commandBuffer input:_I0s[i] output:texture w:w h:h];
+                commandBuffer = [self.class testI:commandBuffer input:_I1s[i] output:texture w:w h:h];
+            }
+            
         } else if (i > _finest_scale) {
             cur_rows /= 2;
             cur_cols /= 2;
             commandBuffer = [self.class copyMakeBorder:commandBuffer texture:_I1 buffer:_I1s_ext[i] width:cur_cols height:cur_rows border:_border_size];
-            commandBuffer = [self.class grayscaleInput:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
-            commandBuffer = [self.class grayscaleInput:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
+            commandBuffer = [self.class scaleInput:commandBuffer texture:_I0 buffer:_I0s[i] width:cur_cols height:cur_rows];
+            commandBuffer = [self.class scaleInput:commandBuffer texture:_I1 buffer:_I1s[i] width:cur_cols height:cur_rows];
+            {   // FIXME: DEBUG
+                int w = cur_cols;
+                int h = cur_rows;
+                MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+                desc.usage = MTLTextureUsageShaderWrite;
+                id<MTLTexture> texture = [MIRMetalContext.device newTextureWithDescriptor:desc];
+                commandBuffer = [self.class testI:commandBuffer input:_I0s[i] output:texture w:w h:h];
+                commandBuffer = [self.class testI:commandBuffer input:_I1s[i] output:texture w:w h:h];
+            }
+            {   // FIXME: DEBUG
+                int w = cur_cols + 2*_border_size;
+                int h = cur_rows + 2*_border_size;
+                MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+                desc.usage = MTLTextureUsageShaderWrite;
+                id<MTLTexture> texture = [MIRMetalContext.device newTextureWithDescriptor:desc];
+                commandBuffer = [self.class testI:commandBuffer input:_I1s_ext[i] output:texture w:w h:h];
+            }
         }
         
         if (i >= _finest_scale) {
@@ -283,7 +355,7 @@
     memset(_Us[_coarsest_scale].contents, 0, _Us[_coarsest_scale].length);
     
     _w = _coarsest_width;
-    _h = _coarsest_width;
+    _h = _coarsest_height;
     for (int i = _coarsest_scale; i >= _finest_scale; i--) {
         if (i < _coarsest_scale) {
             _w *= 2;
@@ -345,8 +417,29 @@
         //            merge(U_channels, u_U[i]);
         //        }
         //
+        
+        {   // FIXME: DEBUG
+            int w = _w ;
+            int h = _h;
+            MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+            desc.usage = MTLTextureUsageShaderWrite;
+            id<MTLTexture> texture1 = [MIRMetalContext.device newTextureWithDescriptor:desc];
+            id<MTLTexture> texture2 = [MIRMetalContext.device newTextureWithDescriptor:desc];
+            commandBuffer = [self.class testU:commandBuffer input:_Us[i] output1:texture1 output2:texture2 w:w h:h];
+        }
+        
         if (i > _finest_scale) {
             commandBuffer = [self.class resizeU:commandBuffer src:_Us[i] dst:_Us[i - 1] dstW:_w*2 dstH:_h*2];
+            
+            {   // FIXME: DEBUG
+                int w = _w*2;
+                int h = _h*2;
+                MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+                desc.usage = MTLTextureUsageShaderWrite;
+                id<MTLTexture> texture1 = [MIRMetalContext.device newTextureWithDescriptor:desc];
+                id<MTLTexture> texture2 = [MIRMetalContext.device newTextureWithDescriptor:desc];
+                commandBuffer = [self.class testU:commandBuffer input:_Us[i - 1] output1:texture1 output2:texture2 w:w h:h];
+            }
         }
     }
     

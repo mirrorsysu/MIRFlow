@@ -61,6 +61,96 @@ id<MTLTexture> loadTexture(NSString *path, int w, int h) {
     return output;
 }
 
+id<MTLTexture> load1(int w, int h) {
+    int bpr = (w * 4 + 256 - 1) / 256 * 256;
+    id<MTLBuffer> buffer = [MIRMetalContext.device newBufferWithLength:bpr * h options:MTLResourceStorageModeShared];
+    id<MTLTexture> input; {
+        MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+        desc.resourceOptions = MTLResourceStorageModeShared;
+        desc.usage = MTLTextureUsageShaderRead;
+        input = [buffer newTextureWithDescriptor:desc offset:0 bytesPerRow:bpr];
+    }
+    id<MTLTexture> output; {
+        MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+        desc.usage = MTLTextureUsageShaderWrite | MTLTextureUsageShaderRead;
+        output = [MIRMetalContext.device newTextureWithDescriptor:desc];
+    }
+    {
+#define at(h, w, c) *((unsigned char *)input.buffer.contents + h * bpr + w * 4 + c)
+        for (int i = 0; i < h; i++) {
+            for (int j = 0; j < w/2; j++) {
+                at(i, j, 0) = 255;
+                at(i, j, 1) = 255;
+                at(i, j, 2) = 255;
+                at(i, j, 3) = 255;
+            }
+        }
+        for (int i = 0; i < h; i++) {
+            for (int j = w/2; j < w; j++) {
+                at(i, j, 0) = 0;
+                at(i, j, 1) = 0;
+                at(i, j, 2) = 0;
+                at(i, j, 3) = 255;
+            }
+        }
+#undef at
+    }
+    
+    {
+        id<MTLCommandBuffer> commandBuffer = [MIRMetalContext makeCommandBuffer];
+        commandBuffer = [MIRFlow grayscale:commandBuffer input:input output:output];
+        [commandBuffer commit];
+        [commandBuffer waitUntilCompleted];
+    }
+    
+    return output;
+}
+
+id<MTLTexture> load2(int w, int h) {
+    int bpr = (w * 4 + 256 - 1) / 256 * 256;
+    id<MTLBuffer> buffer = [MIRMetalContext.device newBufferWithLength:bpr * h options:MTLResourceStorageModeShared];
+    id<MTLTexture> input; {
+        MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+        desc.resourceOptions = MTLResourceStorageModeShared;
+        desc.usage = MTLTextureUsageShaderRead;
+        input = [buffer newTextureWithDescriptor:desc offset:0 bytesPerRow:bpr];
+    }
+    id<MTLTexture> output; {
+        MTLTextureDescriptor *desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:w height:h mipmapped:NO];
+        desc.usage = MTLTextureUsageShaderWrite | MTLTextureUsageShaderRead;
+        output = [MIRMetalContext.device newTextureWithDescriptor:desc];
+    }
+    {
+#define at(h, w, c) *((unsigned char *)input.buffer.contents + h * bpr + w * 4 + c)
+        for (int i = 0; i < h; i++) {
+            for (int j = 0; j < w/2; j++) {
+                at(i, j, 0) = 0;
+                at(i, j, 1) = 0;
+                at(i, j, 2) = 0;
+                at(i, j, 3) = 255;
+            }
+        }
+        for (int i = 0; i < h; i++) {
+            for (int j = w/2; j < w; j++) {
+                at(i, j, 0) = 255;
+                at(i, j, 1) = 255;
+                at(i, j, 2) = 255;
+                at(i, j, 3) = 255;
+            }
+        }
+#undef at
+    }
+    
+    {
+        id<MTLCommandBuffer> commandBuffer = [MIRMetalContext makeCommandBuffer];
+        commandBuffer = [MIRFlow grayscale:commandBuffer input:input output:output];
+        [commandBuffer commit];
+        [commandBuffer waitUntilCompleted];
+    }
+    
+    return output;
+}
+
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
         NSLog(@"Hello, World!");
@@ -71,6 +161,10 @@ int main(int argc, const char * argv[]) {
         [MIRMetalContext startCapture];
         id<MTLTexture> I0 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/摸鱼/MIRFlow/MIRFlow/8.png", w, h);
         id<MTLTexture> I1 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/摸鱼/MIRFlow/MIRFlow/9.png", w, h);
+        w = 1080;
+        h = 1080;
+        I0 = load1(w, h);
+        I1 = load2(w, h);
         
         MIRFlow *flow = [[MIRFlow alloc] init];
         [flow generateBufferWithWidth:w height:h];

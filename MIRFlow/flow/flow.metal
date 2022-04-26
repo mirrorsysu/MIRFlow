@@ -161,6 +161,24 @@ kernel void MIRFlow_SpatialGradientKernel(constant uchar *src [[ buffer(MIRSpati
     vy[offset] = tmp_add - tmp_sub + tmp_x + tmp_y;
 }
 
+uchar4 vload4c(constant uchar *ptr) {
+    uchar4 r;
+    r.x = ptr[0], r.y = ptr[1], r.z = ptr[2], r.w = ptr[3];
+    return r;
+}
+
+short4 vload4s(constant short *ptr) {
+    short4 r;
+    r.x = ptr[0], r.y = ptr[1], r.z = ptr[2], r.w = ptr[3];
+    return r;
+}
+
+uchar2 vload2c(constant uchar *ptr) {
+    uchar2 r;
+    r.x = ptr[0], r.y = ptr[1];
+    return r;
+}
+
 
 kernel void MIRFlow_PrecomputeStructureTensor_hor(constant short *I0x [[ buffer(MIRPrecomputeStructureTensor_I0x) ]],
                                                   constant short *I0y [[ buffer(MIRPrecomputeStructureTensor_I0y) ]],
@@ -172,52 +190,56 @@ kernel void MIRFlow_PrecomputeStructureTensor_hor(constant short *I0x [[ buffer(
                                                   device float *I0y_aux [[ buffer(MIRPrecomputeStructureTensor_I0y_aux) ]],
                                                   uint gid [[ thread_position_in_grid ]]
                                                   ) {
-    if (gid >= (uint)opt.h) {
-        return;
-    }
+    int h = opt.h, w = opt.w, ws = opt.ws, patch_size = opt.patch_size, patch_stride = opt.patch_stride;
+    int i = gid;
     
-    float sum_xx = 0.0, sum_yy = 0.0, sum_xy = 0.0, sum_x = 0.0, sum_y = 0.0;
-    int j = 0;
-    int js = 0;
-#define atI(ptr, row, col) *(ptr + (row) * opt.w + (col))
-#define atAux(ptr, row, col) *(ptr + (row) * opt.ws + (col))
-    for (; j < opt.patch_size; j++) {
-        short x = atI(I0x, gid, j);
-        short y = atI(I0y, gid, j);
-        sum_xx += x * x;
-        sum_yy += y * y;
-        sum_xy += x * y;
-        sum_x += x;
-        sum_y += x;
-    }
-    atAux(I0xx_aux, gid, js) = sum_xx;
-    atAux(I0yy_aux, gid, js) = sum_yy;
-    atAux(I0xy_aux, gid, js) = sum_xy;
-    atAux(I0x_aux, gid, js) = sum_x;
-    atAux(I0y_aux, gid, js) = sum_y;
-    js++;
+    if (i >= h) return;
     
-    for (; j < opt.w; j++) {
-        short xp = atI(I0x, gid, j - opt.patch_size);
-        short yp = atI(I0y, gid, j - opt.patch_size);
-        short x = atI(I0x, gid, j);
-        short y = atI(I0y, gid, j);
-        sum_xx += x * x - xp * xp;
-        sum_yy += y * y - yp * yp;
-        sum_xy += x * y - xp * yp;
-        sum_x += x - xp;
-        sum_y += x - xp;
-        if ((j - opt.patch_size + 1) % opt.patch_stride == 0) {
-            atAux(I0xx_aux, gid, js) = sum_xx;
-            atAux(I0yy_aux, gid, js) = sum_yy;
-            atAux(I0xy_aux, gid, js) = sum_xy;
-            atAux(I0x_aux, gid, js) = sum_x;
-            atAux(I0y_aux, gid, js) = sum_y;
+    constant short *x_row = I0x + i * w;
+    constant short *y_row = I0y + i * w;
+    
+    float sum_xx = 0.0f, sum_yy = 0.0f, sum_xy = 0.0f, sum_x = 0.0f, sum_y = 0.0f;
+    
+    float4 x_vec_lo = float4(vload4s(x_row));
+    float4 x_vec_hi = float4(vload4s(x_row + 4));
+    float4 y_vec_lo = float4(vload4s(y_row));
+    float4 y_vec_hi = float4(vload4s(y_row + 4));
+    
+    sum_xx = dot(x_vec_lo, x_vec_lo) + dot(x_vec_hi, x_vec_hi);
+    sum_yy = dot(y_vec_lo, y_vec_lo) + dot(y_vec_hi, y_vec_hi);
+    sum_xy = dot(x_vec_lo, y_vec_lo) + dot(x_vec_hi, y_vec_hi);
+    sum_x = dot(x_vec_lo, 1.0f) + dot(x_vec_hi, 1.0f);
+    sum_y = dot(y_vec_lo, 1.0f) + dot(y_vec_hi, 1.0f);
+    
+    I0xx_aux[i * ws] = sum_xx;
+    I0yy_aux[i * ws] = sum_yy;
+    I0xy_aux[i * ws] = sum_xy;
+    I0x_aux[i * ws] = sum_x;
+    I0y_aux[i * ws] = sum_y;
+    
+    int js = 1;
+    for (int j = patch_size; j < w; j++)
+    {
+        short x_val1 = x_row[j];
+        short x_val2 = x_row[j - patch_size];
+        short y_val1 = y_row[j];
+        short y_val2 = y_row[j - patch_size];
+        sum_xx += (x_val1 * x_val1 - x_val2 * x_val2);
+        sum_yy += (y_val1 * y_val1 - y_val2 * y_val2);
+        sum_xy += (x_val1 * y_val1 - x_val2 * y_val2);
+        sum_x += (x_val1 - x_val2);
+        sum_y += (y_val1 - y_val2);
+        if ((j - patch_size + 1) % patch_stride == 0)
+        {
+            int index = i * ws + js;
+            I0xx_aux[index] = sum_xx;
+            I0yy_aux[index] = sum_yy;
+            I0xy_aux[index] = sum_xy;
+            I0x_aux[index] = sum_x;
+            I0y_aux[index] = sum_y;
             js++;
         }
     }
-#undef atI
-#undef atAux
 }
 
 kernel void MIRFlow_PrecomputeStructureTensor_ver(constant float *I0xx_aux [[ buffer(MIRPrecomputeStructureTensor_I0xx_aux) ]],
@@ -232,60 +254,50 @@ kernel void MIRFlow_PrecomputeStructureTensor_ver(constant float *I0xx_aux [[ bu
                                                   device float *I0x_buf [[ buffer(MIRPrecomputeStructureTensor_I0x_buf) ]],
                                                   device float *I0y_buf [[ buffer(MIRPrecomputeStructureTensor_I0y_buf) ]],
                                                   uint gid [[ thread_position_in_grid ]]
-                                                  ) {
-    if (gid >= (uint)opt.ws) {
-        return;
-    }
+                                                  )
+{
+    int h = opt.h, ws = opt.ws, patch_size = opt.patch_size, patch_stride = opt.patch_stride;
+    int j = gid;
     
-    float sum_xx = 0.0, sum_yy = 0.0, sum_xy = 0.0, sum_x = 0.0, sum_y = 0.0;
-    int i = 0;
-    int is = 0;
-#define at(ptr, row, col) *(ptr + (row) * opt.ws + (col))
-    for (; i < opt.patch_size; i++) {
-        sum_xx += at(I0xx_aux, i, gid);
-        sum_yy += at(I0yy_aux, i, gid);
-        sum_xy += at(I0xy_aux, i, gid);
-        sum_x += at(I0x_aux, i, gid);
-        sum_y += at(I0y_aux, i, gid);
-    }
-    at(I0xx_buf, is, gid) = sum_xx;
-    at(I0yy_buf, is, gid) = sum_yy;
-    at(I0xy_buf, is, gid) = sum_xy;
-    at(I0x_buf, is, gid) = sum_x;
-    at(I0y_buf, is, gid) = sum_y;
-    is++;
+    if (j >= ws) return;
     
-    for (; i < opt.h; i++) {
-        sum_xx += at(I0xx_aux, i, gid) - at(I0xx_aux, i - opt.patch_size, gid);
-        sum_yy += at(I0yy_aux, i, gid) - at(I0yy_aux, i - opt.patch_size, gid);
-        sum_xy += at(I0xy_aux, i, gid) - at(I0xy_aux, i - opt.patch_size, gid);
-        sum_x += at(I0x_aux, i, gid) - at(I0x_aux, i - opt.patch_size, gid);
-        sum_y += at(I0y_aux, i, gid) - at(I0y_aux, i - opt.patch_size, gid);
-        if ((i - opt.patch_size + 1) % opt.patch_stride == 0) {
-            at(I0xx_buf, is, gid) = sum_xx;
-            at(I0yy_buf, is, gid) = sum_yy;
-            at(I0xy_buf, is, gid) = sum_xy;
-            at(I0x_buf, is, gid) = sum_x;
-            at(I0y_buf, is, gid) = sum_y;
-            is++;;
+    float sum_xx, sum_yy, sum_xy, sum_x, sum_y;
+    sum_xx = sum_yy = sum_xy = sum_x = sum_y = 0.0f;
+    
+    for (int i = 0; i < patch_size; i++)
+    {
+        sum_xx += I0xx_aux[i * ws + j];
+        sum_yy += I0yy_aux[i * ws + j];
+        sum_xy += I0xy_aux[i * ws + j];
+        sum_x  += I0x_aux[i * ws + j];
+        sum_y  += I0y_aux[i * ws + j];
+    }
+    I0xx_buf[j] = sum_xx;
+    I0yy_buf[j] = sum_yy;
+    I0xy_buf[j] = sum_xy;
+    I0x_buf[j] = sum_x;
+    I0y_buf[j] = sum_y;
+    
+    int is = 1;
+    for (int i = patch_size; i < h; i++)
+    {
+        sum_xx += (I0xx_aux[i * ws + j] - I0xx_aux[(i - patch_size) * ws + j]);
+        sum_yy += (I0yy_aux[i * ws + j] - I0yy_aux[(i - patch_size) * ws + j]);
+        sum_xy += (I0xy_aux[i * ws + j] - I0xy_aux[(i - patch_size) * ws + j]);
+        sum_x  += (I0x_aux[i * ws + j] - I0x_aux[(i - patch_size) * ws + j]);
+        sum_y  += (I0y_aux[i * ws + j] - I0y_aux[(i - patch_size) * ws + j]);
+        
+        if ((i - patch_size + 1) % patch_stride == 0)
+        {
+            I0xx_buf[is * ws + j] = sum_xx;
+            I0yy_buf[is * ws + j] = sum_yy;
+            I0xy_buf[is * ws + j] = sum_xy;
+            I0x_buf[is * ws + j] = sum_x;
+            I0y_buf[is * ws + j] = sum_y;
+            is++;
         }
     }
-#undef at
 }
-
-
-uchar4 vload4c(constant uchar *ptr) {
-    return *((constant uchar4 *)ptr);
-}
-
-short4 vload4s(constant short *ptr) {
-    return *((constant short4 *)ptr);
-}
-
-uchar2 vload2c(constant uchar *ptr) {
-    return *((constant uchar2 *)ptr);
-}
-
 
 #define INIT_BILINEAR_WEIGHTS(Ux, Uy) \
 i_I1 = clamp(i + Uy + border_size, i_lower_limit, i_upper_limit); \
@@ -306,7 +318,7 @@ float computeSSDMeanNorm(constant uchar *I0_ptr,
                          int patch_size,
                          float w00, float w01, float w10, float w11,
                          int i,
-                         threadgroup vector_float2 *smem /*[8]*/
+                         threadgroup vector_float2 *smem /*[89]*/
                          )
 {
     int n = patch_size * patch_size;
@@ -336,7 +348,7 @@ float computeSSDMeanNorm(constant uchar *I0_ptr,
     }
     float sum_diff = dot(vec1, float4(1.0)) + dot(vec1, float4(1.0));
     float sum_diff_sq = dot(vec1, vec1) + dot(vec1, vec1);
-    
+   
     threadgroup_barrier(mem_flags::mem_threadgroup);
     smem[i] = (vector_float2){sum_diff, sum_diff_sq};
     threadgroup_barrier(mem_flags::mem_threadgroup);

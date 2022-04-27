@@ -62,7 +62,7 @@
 @implementation MIRFlow
 - (instancetype)init {
     if (self = [super init]) {
-        _coarsest_scale = 4;
+        _coarsest_scale = 6;
         _finest_scale = 2;
         
         _num_iter = 2;

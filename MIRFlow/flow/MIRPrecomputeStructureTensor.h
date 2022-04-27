@@ -6,7 +6,7 @@
 //
 
 #import <Foundation/Foundation.h>
-@import Metal;
+#import <Metal/Metal.h>
 
 #import "MIRFlowShaderTypes.h"
 

@@ -77,16 +77,16 @@ id<MTLTexture> load1(int w, int h) {
     }
     {
 #define at(h, w, c) *((unsigned char *)input.buffer.contents + h * bpr + w * 4 + c)
-        for (int i = 0; i < h; i++) {
-            for (int j = 0; j < w/2; j++) {
+        for (int i = 0; i < h/2; i++) {
+            for (int j = 0; j < w; j++) {
                 at(i, j, 0) = 255;
                 at(i, j, 1) = 255;
                 at(i, j, 2) = 255;
                 at(i, j, 3) = 255;
             }
         }
-        for (int i = 0; i < h; i++) {
-            for (int j = w/2; j < w; j++) {
+        for (int i = h/2; i < h; i++) {
+            for (int j = 0; j < w; j++) {
                 at(i, j, 0) = 0;
                 at(i, j, 1) = 0;
                 at(i, j, 2) = 0;
@@ -122,16 +122,16 @@ id<MTLTexture> load2(int w, int h) {
     }
     {
 #define at(h, w, c) *((unsigned char *)input.buffer.contents + h * bpr + w * 4 + c)
-        for (int i = 0; i < h; i++) {
-            for (int j = 0; j < w/2; j++) {
+        for (int i = 0; i < h/2; i++) {
+            for (int j = 0; j < w; j++) {
                 at(i, j, 0) = 0;
                 at(i, j, 1) = 0;
                 at(i, j, 2) = 0;
                 at(i, j, 3) = 255;
             }
         }
-        for (int i = 0; i < h; i++) {
-            for (int j = w/2; j < w; j++) {
+        for (int i = h/2; i < h; i++) {
+            for (int j = 0; j < w; j++) {
                 at(i, j, 0) = 255;
                 at(i, j, 1) = 255;
                 at(i, j, 2) = 255;
@@ -161,10 +161,10 @@ int main(int argc, const char * argv[]) {
         [MIRMetalContext startCapture];
         id<MTLTexture> I0 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/摸鱼/MIRFlow/MIRFlow/8.png", w, h);
         id<MTLTexture> I1 = loadTexture(@"/Users/guangzhuiyuandev/Desktop/摸鱼/MIRFlow/MIRFlow/9.png", w, h);
-        w = 1080;
-        h = 1080;
-        I0 = load1(w, h);
-        I1 = load2(w, h);
+//        w = 64;
+//        h = 64;
+//        I0 = load1(w, h);
+//        I1 = load2(w, h);
         
         MIRFlow *flow = [[MIRFlow alloc] init];
         [flow generateBufferWithWidth:w height:h];

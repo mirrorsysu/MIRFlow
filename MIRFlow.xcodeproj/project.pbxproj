@@ -11,6 +11,8 @@
 		03EA9DF2280AD88900E3AF33 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 03EA9DF1280AD88900E3AF33 /* main.m */; };
 		03EA9E13280AD92300E3AF33 /* flow.metal in Sources */ = {isa = PBXBuildFile; fileRef = 03EA9E12280AD92300E3AF33 /* flow.metal */; };
 		159EC06A280FCBA500B06389 /* MIRSpatialGradient.m in Sources */ = {isa = PBXBuildFile; fileRef = 159EC069280FCBA500B06389 /* MIRSpatialGradient.m */; };
+		15EFA22A281907DA00A263DA /* test.metal in Sources */ = {isa = PBXBuildFile; fileRef = 15EFA229281907DA00A263DA /* test.metal */; };
+		15EFA22C281907EC00A263DA /* utils.metal in Sources */ = {isa = PBXBuildFile; fileRef = 15EFA22B281907EC00A263DA /* utils.metal */; };
 		15F3B028280E7A260077FAF1 /* MIRFlow.m in Sources */ = {isa = PBXBuildFile; fileRef = 15F3B027280E7A260077FAF1 /* MIRFlow.m */; };
 		15F3B042280E7A6C0077FAF1 /* MIRMetal.metal in Sources */ = {isa = PBXBuildFile; fileRef = 15F3B02A280E7A6C0077FAF1 /* MIRMetal.metal */; };
 		15F3B04C280E7A6C0077FAF1 /* MIRMetalContext.m in Sources */ = {isa = PBXBuildFile; fileRef = 15F3B03F280E7A6C0077FAF1 /* MIRMetalContext.m */; };
@@ -43,6 +45,8 @@
 		158BAC7A2815135F00AB10CF /* 8.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = 8.png; sourceTree = "<group>"; };
 		159EC068280FCBA500B06389 /* MIRSpatialGradient.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MIRSpatialGradient.h; sourceTree = "<group>"; };
 		159EC069280FCBA500B06389 /* MIRSpatialGradient.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MIRSpatialGradient.m; sourceTree = "<group>"; };
+		15EFA229281907DA00A263DA /* test.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; path = test.metal; sourceTree = "<group>"; };
+		15EFA22B281907EC00A263DA /* utils.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; path = utils.metal; sourceTree = "<group>"; };
 		15F3B026280E7A260077FAF1 /* MIRFlow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = MIRFlow.h; sourceTree = "<group>"; };
 		15F3B027280E7A260077FAF1 /* MIRFlow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = MIRFlow.m; sourceTree = "<group>"; };
 		15F3B02A280E7A6C0077FAF1 /* MIRMetal.metal */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.metal; path = MIRMetal.metal; sourceTree = "<group>"; };
@@ -111,6 +115,8 @@
 				15F3B026280E7A260077FAF1 /* MIRFlow.h */,
 				15F3B027280E7A260077FAF1 /* MIRFlow.m */,
 				03EA9E12280AD92300E3AF33 /* flow.metal */,
+				15EFA229281907DA00A263DA /* test.metal */,
+				15EFA22B281907EC00A263DA /* utils.metal */,
 				15F3B04D280E7AAA0077FAF1 /* MIRPrecomputeStructureTensor.h */,
 				15F3B04E280E7AAA0077FAF1 /* MIRPrecomputeStructureTensor.m */,
 				15F3B050280E7CE40077FAF1 /* MIRInvertSearch.h */,
@@ -160,7 +166,7 @@
 		03EA9DE6280AD88900E3AF33 /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1220;
+				LastUpgradeCheck = 1330;
 				TargetAttributes = {
 					03EA9DED280AD88900E3AF33 = {
 						CreatedOnToolsVersion = 12.2;
@@ -191,10 +197,12 @@
 			buildActionMask = 2147483647;
 			files = (
 				15F3B04C280E7A6C0077FAF1 /* MIRMetalContext.m in Sources */,
+				15EFA22C281907EC00A263DA /* utils.metal in Sources */,
 				03EA9DF2280AD88900E3AF33 /* main.m in Sources */,
 				15F3B052280E7CE40077FAF1 /* MIRInvertSearch.m in Sources */,
 				159EC06A280FCBA500B06389 /* MIRSpatialGradient.m in Sources */,
 				15F3B028280E7A260077FAF1 /* MIRFlow.m in Sources */,
+				15EFA22A281907DA00A263DA /* test.metal in Sources */,
 				15F3B042280E7A6C0077FAF1 /* MIRMetal.metal in Sources */,
 				0379690E2813E69A00C4A5FA /* MIRDensification.m in Sources */,
 				03EA9E13280AD92300E3AF33 /* flow.metal in Sources */,
@@ -319,9 +327,14 @@
 		03EA9DF6280AD88900E3AF33 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 899Y8Y2AQ7;
 				ENABLE_HARDENED_RUNTIME = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/MIRFlow",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Debug;
@@ -329,9 +342,14 @@
 		03EA9DF7280AD88900E3AF33 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = 899Y8Y2AQ7;
 				ENABLE_HARDENED_RUNTIME = YES;
+				FRAMEWORK_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(PROJECT_DIR)/MIRFlow",
+				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;
